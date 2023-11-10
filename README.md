@@ -79,10 +79,10 @@ if ('error' in response) {
 }
 
 // or using the "to" function to get error and result separately
-const [error, resultResponse] = 
+const [error, result] = 
   to<"daemon", "DERO.GetHeight", Result>(response);
-if (resultResponse !== undefined) {
-  console.log(resultResponse.result.topoheight)
+if (result !== undefined) {
+  console.log(result.topoheight)
 }
 ```
 
@@ -104,6 +104,10 @@ await xswd.subscribe({
 // once subscribed you can wait for this event
 await xswd.waitFor("new_balance")
 
+// add a predicate
+await xswd.waitFor("new_topoheight", 
+  (new_height: number) => new_height > 2394
+)
 
 // you can add a callback to the subscription
 await xswd.subscribe({
