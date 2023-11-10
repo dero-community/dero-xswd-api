@@ -1,4 +1,4 @@
-import { Response, Result } from "./types/response";
+import { Response, Result, ResultResponse } from "./types/response";
 import { Entity } from "./types/types";
 import { Method } from "./types/request";
 
@@ -24,9 +24,11 @@ export async function sleep(timems: number) {
 
 export function to<E extends Entity, M extends Method<E>, R extends Result>(
   response: Response<E, M, R>
-): [Response<E, M, "error"> | undefined, Response<E, M, "result"> | undefined] {
+): [Response<E, M, "error"> | undefined, ResultResponse<E, M> | undefined] {
   return [
     "error" in response ? (response as Response<E, M, "error">) : undefined,
-    "result" in response ? (response as Response<E, M, "result">) : undefined,
+    "result" in response
+      ? (response.result as ResultResponse<E, M>)
+      : undefined,
   ];
 }
