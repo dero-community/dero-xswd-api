@@ -457,3 +457,49 @@ describe("commands", () => {
     }, 10000);
   });
 });
+describe("events", () => {
+  test(
+    "new_topoheight",
+    async () => {
+      xswd.subscribe({
+        event: "new_topoheight",
+        callback: () => {
+          expect(true).toBe(true);
+        },
+      });
+
+      await xswd.waitFor("new_topoheight");
+    },
+    TIMEOUT
+  );
+
+  test(
+    "new_balance",
+    async () => {
+      const addressResponse = await xswd.wallet.GetAddress();
+
+      if ("error" in addressResponse) {
+        throw "cannot get address";
+      }
+      const address = addressResponse.result.address;
+      const response = await xswd.wallet.GetBalance();
+      if ("error" in response) {
+        throw "cannot get balance: " + response.error.message;
+      }
+      console.log("initial balance: " + response.result.balance);
+
+      await xswd.subscribe({
+        event: "new_balance",
+        callback: (result: any) => {
+          console.warn(result);
+        },
+      });
+
+      //! panics => need to find a way to test with another address
+      await xswd.wallet.transfer({ amount: 100000, destination: address });
+
+      await xswd.waitFor("new_balance");
+    },
+    TIMEOUT
+  );
+});

@@ -29,11 +29,55 @@ export class Api {
   _connection: Connection;
   initialized: boolean = false;
 
+  constructor(appInfo: AppInfo) {
+    debug("creating connection");
+    checkAppInfo(appInfo);
+    this._connection = new Connection(appInfo);
+  }
+
   async initialize() {
     const initialisation = await this._connection.initialize();
     debug({ initialisation });
     this.initialized = initialisation;
     return initialisation;
+  }
+
+  async close() {
+    await this._connection.close();
+  }
+
+  async subscribe(
+    { event, callback }: { event: EventType; callback?: any },
+    subscriptionType: "auto" | "permanent" = "permanent"
+  ) {
+    if (
+      // prevent auto to overwrite permanent
+      this._connection.events[event].subscribed == "permanent" ||
+      // prevent resetting the same a second time
+      this._connection.events[event].subscribed == subscriptionType
+    ) {
+      return true;
+    }
+    const subscription = await this._connection.sendSync(
+      "wallet",
+      "Subscribe",
+      {
+        jsonrpc: "2.0",
+        method: "Subscribe",
+        params: { event },
+      }
+    );
+    if ("result" in subscription) {
+      if (subscription.result) {
+        this._connection.events[event].subscribed = subscriptionType;
+      }
+      return subscription.result;
+    }
+    return false;
+  }
+
+  async waitFor(event: EventType) {
+    return await this._connection._checkEvent(event);
   }
 
   wallet = {
@@ -116,7 +160,7 @@ export class Api {
     },
     async transfer(params: Transfer | Transfer2, waitForEntry?: boolean) {
       if (waitForEntry === true) {
-        this._api.subscribe("new_entry", "auto");
+        this._api.subscribe({ event: "new_entry" }, "auto");
       }
       return await this._api._connection.sendSync(
         "wallet",
@@ -131,7 +175,7 @@ export class Api {
     },
     async scinvoke(params: SCInvoke, waitForEntry?: boolean) {
       if (waitForEntry === true) {
-        this._api.subscribe("new_entry", "auto");
+        this._api.subscribe({ event: "new_entry" }, "auto");
       }
       return await this._api._connection.sendSync(
         "wallet",
@@ -292,7 +336,7 @@ export class Api {
     async GetSC(params: DEROGetSC, waitAfterNewBlock?: true) {
       if (waitAfterNewBlock) {
         debug("waiting for new block");
-        this._api.subscribe("new_topoheight", "auto");
+        this._api.subscribe({ event: "new_topoheight" }, "auto");
         await this._api._connection._checkEvent("new_topoheight");
       }
       return await this._api._connection.sendSync("daemon", "DERO.GetSC", {
@@ -325,46 +369,8 @@ export class Api {
       );
     },
   };
-
-  constructor(appInfo: AppInfo) {
-    debug("creating connection");
-    checkAppInfo(appInfo);
-    this._connection = new Connection(appInfo);
-  }
-  async close() {
-    await this._connection.close();
-  }
-
-  async subscribe(
-    event: EventType,
-    subscriptionType: "auto" | "permanent" = "permanent"
-  ) {
-    if (
-      // prevent auto to overwrite permanent
-      this._connection.events[event].subscribed == "permanent" ||
-      // prevent resetting the same a second time
-      this._connection.events[event].subscribed == subscriptionType
-    ) {
-      return true;
-    }
-    const subscription = await this._connection.sendSync(
-      "wallet",
-      "Subscribe",
-      {
-        jsonrpc: "2.0",
-        method: "Subscribe",
-        params: { event },
-      }
-    );
-    if ("result" in subscription) {
-      if (subscription.result) {
-        this._connection.events[event].subscribed = subscriptionType;
-      }
-      return subscription.result;
-    }
-    return false;
-  }
 }
+
 function checkAppInfo(appInfo: AppInfo) {
   if (appInfo.name !== undefined && appInfo.name.length == 0) {
     throw "invalid app name";

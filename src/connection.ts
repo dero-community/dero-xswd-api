@@ -15,9 +15,9 @@ export enum ConnectionState {
 }
 
 // TODO programmable timeouts
-const AUTH_TIMEOUT = 30000;
-const METHOD_TIMEOUT = 10000;
-const BLOCK_TIMEOUT = 20000;
+const AUTH_TIMEOUT = 40000;
+const METHOD_TIMEOUT = 20000;
+const BLOCK_TIMEOUT = 30000;
 const INTERVAL = 100;
 
 export default class Connection {
@@ -31,6 +31,7 @@ export default class Connection {
       processed: boolean;
       value: any;
       subscribed: false | "auto" | "permanent";
+      callback?: (value: any) => void;
     };
   } = {
     new_topoheight: {
@@ -173,6 +174,10 @@ export default class Connection {
   private handleEvent(data: EventResponse) {
     this.events[data.result.event].value = data.result.value;
     this.events[data.result.event].processed = false;
+    const callback = this.events[data.result.event].callback;
+    if (callback) {
+      callback(data.result.value);
+    }
   }
 
   send(
