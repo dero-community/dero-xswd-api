@@ -8,7 +8,10 @@
     "build": "tsup",
     "test": "jest"
   },
-  "repository": "git+https://github.com/dero-community/xswd-api.git",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dero-community/xswd-api.git"
+  },
   "keywords": [
     "dero",
     "xswd",
@@ -16,7 +19,9 @@
     "ts",
     "js"
   ],
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "author": "bisounours",
   "license": "MIT",
   "bugs": {
