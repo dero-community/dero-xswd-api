@@ -53,6 +53,8 @@ export type ResultResponse<E extends Entity, M extends Method<E>> = M extends
   ? boolean
   : M extends "transfer"
   ? { txid: string }
+  : M extends "GetTransferbyTXID"
+  ? TransferResult
   : unknown;
 
 export type Response<
@@ -190,7 +192,7 @@ type DERONameToAddressResult = {
 
 type GetBalanceResult = { balance: Uint64; unlocked_balance: Uint64 };
 
-type Transfer = {
+export type TransferResult = {
   height: Uint64;
   topoheight: Uint64;
   blockhash: Hash;
@@ -221,7 +223,7 @@ type Transfer = {
 };
 
 type GetTransfersResult = {
-  entries: Transfer[];
+  entries: TransferResult[];
 };
 
 type DEROGetSCResult = {

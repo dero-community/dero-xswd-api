@@ -22,6 +22,7 @@ import {
 } from "./types/request";
 import { AppInfo, EventType } from "./types/types";
 import makeDebug from "./debug";
+import { Response, Result, TransferResult } from "./types/response";
 
 const debug = makeDebug("xswd");
 
@@ -50,14 +51,6 @@ export class Api {
     { event, callback }: { event: EventType; callback?: any },
     subscriptionType: "auto" | "permanent" = "permanent"
   ) {
-    if (
-      // prevent auto to overwrite permanent
-      this._connection.events[event].subscribed == "permanent" ||
-      // prevent resetting the same a second time
-      this._connection.events[event].subscribed == subscriptionType
-    ) {
-      return true;
-    }
     const subscription = await this._connection.sendSync(
       "wallet",
       "Subscribe",
@@ -70,14 +63,21 @@ export class Api {
     if ("result" in subscription) {
       if (subscription.result) {
         this._connection.events[event].subscribed = subscriptionType;
+        // dont overwrite user callback
+        if (subscriptionType == "permanent") {
+          this._connection.events[event].callback = callback;
+        }
       }
       return subscription.result;
     }
     return false;
   }
 
-  async waitFor(event: EventType) {
-    return await this._connection._checkEvent(event);
+  async waitFor(
+    event: EventType,
+    predicate?: (eventValue: TransferResult | any) => boolean
+  ) {
+    return await this._connection._checkEvent(event, predicate);
   }
 
   wallet = {
@@ -162,31 +162,77 @@ export class Api {
       if (waitForEntry === true) {
         this._api.subscribe({ event: "new_entry" }, "auto");
       }
-      return await this._api._connection.sendSync(
+      const response = await this._api._connection.sendSync(
         "wallet",
         "transfer",
         {
           jsonrpc: "2.0",
           method: "transfer",
           params,
-        },
-        waitForEntry === true ? "new_entry" : undefined
+        }
       );
+
+      if ("error" in response) {
+        throw "could not transfer: " + response.error.message;
+      }
+      if (
+        !(
+          typeof response.result == "object" &&
+          response.result != null &&
+          "txid" in response.result
+        )
+      ) {
+        throw "could not transfer: unknown error";
+      }
+
+      if (waitForEntry) {
+        return {
+          result: await this._api.waitFor(
+            "new_entry",
+            (eventValue) =>
+              eventValue.txid === (response.result as TransferResult).txid
+          ),
+        } as Response<"wallet", "GetTransferbyTXID", Result>;
+      }
+      return response;
     },
     async scinvoke(params: SCInvoke, waitForEntry?: boolean) {
       if (waitForEntry === true) {
         this._api.subscribe({ event: "new_entry" }, "auto");
       }
-      return await this._api._connection.sendSync(
+      const response = await this._api._connection.sendSync(
         "wallet",
         "scinvoke",
         {
           jsonrpc: "2.0",
           method: "scinvoke",
           params,
-        },
-        waitForEntry === true ? "new_entry" : undefined
+        }
       );
+
+      if ("error" in response) {
+        throw "could not scinvoke: " + response.error.message;
+      }
+      if (
+        !(
+          typeof response.result == "object" &&
+          response.result != null &&
+          "txid" in response.result
+        )
+      ) {
+        throw "could not scinvoke: unknown error";
+      }
+
+      if (waitForEntry) {
+        return {
+          result: await this._api.waitFor(
+            "new_entry",
+            (eventValue) =>
+              eventValue.txid === (response.result as TransferResult).txid
+          ),
+        } as Response<"wallet", "GetTransferbyTXID", Result>;
+      }
+      return response;
     },
   };
   node = {
@@ -337,7 +383,7 @@ export class Api {
       if (waitAfterNewBlock) {
         debug("waiting for new block");
         this._api.subscribe({ event: "new_topoheight" }, "auto");
-        await this._api._connection._checkEvent("new_topoheight");
+        await this._api.waitFor("new_topoheight");
       }
       return await this._api._connection.sendSync("daemon", "DERO.GetSC", {
         jsonrpc: "2.0",

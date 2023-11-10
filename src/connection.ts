@@ -175,6 +175,8 @@ export default class Connection {
     this.events[data.result.event].value = data.result.value;
     this.events[data.result.event].processed = false;
     const callback = this.events[data.result.event].callback;
+    debug("Handling event", { data, callback });
+
     if (callback) {
       callback(data.result.value);
     }
@@ -205,8 +207,7 @@ export default class Connection {
   async sendSync<E extends Entity, M extends Method<E>>(
     entity: E,
     method: M,
-    body: Omit<JSONRPCRequestBody<typeof entity, typeof method>, "id">,
-    waitOnEvent?: EventType
+    body: Omit<JSONRPCRequestBody<typeof entity, typeof method>, "id">
   ): Promise<Response<E, M, "error"> | Response<E, M, "result">> {
     debug("sendSync:", { body });
 
@@ -219,24 +220,30 @@ export default class Connection {
     console.log(data);
 
     delete this.responses[id];
-    if (waitOnEvent) {
-      await this._checkEvent(waitOnEvent);
-    }
+
     return data;
   }
 
   private _checkResponse(id: number) {
     return new Promise<void>(async (resolve, reject) => {
+      // setup a timeout for response checking
       const timeout = setTimeout(() => {
+        // delete the timeout record
         this.timeouts.delete(timeout);
         reject("request timeout");
       }, METHOD_TIMEOUT);
+
+      // record this timeout (if we close we need to clear the handles)
       this.timeouts.add(timeout);
+
+      // loop over time to see if the event has been received
       for (let attempts = 1; ; attempts++) {
         await sleep(INTERVAL * attempts); // double the time at each new attempts
         debug("checking response", id);
 
+        // if event hasn't already been processed
         if (this.responses[id] !== null && this.responses[id] !== undefined) {
+          // handle
           debug(`response ${id}`, this.responses[id]);
           this.timeouts.delete(timeout);
           resolve();
@@ -246,24 +253,38 @@ export default class Connection {
     });
   }
 
-  _checkEvent(eventType: EventType) {
+  // TODO Typing
+  _checkEvent(
+    eventType: EventType,
+    predicate?: (eventValue: any) => boolean
+  ): Promise<any> {
     return new Promise<any>(async (resolve, reject) => {
+      // setup a timeout for event checking
       const timeout = setTimeout(() => {
+        // delete the timeout record
         this.timeouts.delete(timeout);
         reject("event check timeout");
       }, BLOCK_TIMEOUT);
+
+      // record this timeout (if we close we need to clear the handles)
       this.timeouts.add(timeout);
+
+      // loop over time to see if the event has been received
       for (let attempts = 1; ; attempts++) {
         await sleep(INTERVAL * attempts); // double the time at each new attempts
         debug("checking event", eventType);
 
-        if (!this.events[eventType].processed) {
-          this.events[eventType].processed = true;
-          debug("checked event", eventType);
-          this.timeouts.delete(timeout);
-          resolve(this.events[eventType].value);
-          break;
-        }
+        // if there is no predicate or this is the target
+        if (predicate === undefined || predicate(this.events[eventType].value))
+          if (!this.events[eventType].processed) {
+            // if event hasn't already been processed
+            // handle
+            this.events[eventType].processed = true;
+            debug("checked event", eventType);
+            this.timeouts.delete(timeout);
+            resolve(this.events[eventType].value);
+            break;
+          }
       }
     });
   }

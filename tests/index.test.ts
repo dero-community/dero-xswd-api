@@ -1,5 +1,5 @@
 import { describe, expect, beforeAll, test } from "@jest/globals";
-import { Api } from "../src/xsdw";
+import { Api } from "../src/xswd";
 import { AppInfo } from "../src/types/types";
 import { sleep, to } from "../src/utils";
 import { Result } from "../src/types/response";
@@ -75,9 +75,10 @@ beforeAll(async () => {
     },
     true
   );
-  if ("result" in transferResponse) {
-    transfer = transferResponse.result.txid;
-  } else throw "could not transfer";
+  if ("error" in transferResponse) {
+    throw "could not transfer" + transferResponse.error.message;
+  }
+  transfer = transferResponse.result.txid;
 }, TIMEOUT);
 
 describe("commands", () => {
@@ -445,16 +446,6 @@ describe("commands", () => {
       expect(error).toBeUndefined();
       // expect(resultResponse) // TODO
     });
-
-    test("(convenience)", async () => {
-      await sleep(4000);
-    });
-  });
-  describe("end", () => {
-    test("close", async () => {
-      xswd.close();
-      await sleep(5000);
-    }, 10000);
   });
 });
 describe("events", () => {
@@ -502,4 +493,15 @@ describe("events", () => {
     },
     TIMEOUT
   );
+
+  test("(convenience)", async () => {
+    await sleep(4000);
+  });
+});
+
+describe("end", () => {
+  test("close", async () => {
+    xswd.close();
+    await sleep(5000);
+  }, 10000);
 });

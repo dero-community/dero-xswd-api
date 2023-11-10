@@ -1,5 +1,5 @@
 # XSWD Web API
-
+Disclaimer: Be aware that this API is still under development and might change.
 ## Getting started
 
 ### Install
