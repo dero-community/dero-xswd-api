@@ -6,7 +6,6 @@ import {
   MakeIntegratedAddress,
   QueryKey,
   SplitIntegratedAddress,
-  Transfer,
   SCInvoke,
   DEROGetBlock,
   DEROGetBlockHeaderByHash,
@@ -18,7 +17,7 @@ import {
   DEROGetSC,
   DEROGetTransaction,
   DERONameToAddress,
-  Transfer2,
+  Transfer,
 } from "./types/request";
 import { AppInfo, EventType } from "./types/types";
 import makeDebug from "./debug";
@@ -158,7 +157,7 @@ export class Api {
         params,
       });
     },
-    async transfer(params: Transfer | Transfer2, waitForEntry?: boolean) {
+    async transfer(params: Transfer, waitForEntry?: boolean) {
       if (waitForEntry === true) {
         this._api.subscribe({ event: "new_entry" }, "auto");
       }

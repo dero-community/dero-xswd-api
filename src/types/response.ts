@@ -227,10 +227,15 @@ type GetTransfersResult = {
 };
 
 type DEROGetSCResult = {
-  // TODO incomplete
+  valuesuint64: string[];
+  valuesstring: string[];
+  valuesbytes: string[];
   stringkeys: {
     C: string;
-    [sk: string | number]: string | number;
+    [k: string]: string;
+  };
+  uint64keys: {
+    [k: number]: number;
   };
   balances: {
     [scid: Hash]: Uint64;

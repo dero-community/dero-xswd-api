@@ -31,7 +31,7 @@ const appInfo: AppInfo = {
 };
 
 // Create the api object
-const xswd = new Api(appInfo)
+const xswd = new Api(appInfo);
 
 // Initialize the connection => Will require to confirm in your wallet
 const result = await xswd.initialize();
@@ -43,13 +43,13 @@ import { Api, generateAppId } from "xswd-api";
 
 const name = "My application";
 
-const appInfo: AppInfo = {
+const appInfo = {
   id: await generateAppId(name),
   name,
   description: "My app's description",
 };
 
-const xswd = new Api(appInfo)
+const xswd = new Api(appInfo);
 
 const result = await xswd.initialize();
 ```

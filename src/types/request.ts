@@ -106,7 +106,7 @@ export type Params<
   : M extends "QueryKey"
   ? QueryKey
   : M extends "transfer"
-  ? Transfer | Transfer2
+  ? Transfer
   : M extends "scinvoke"
   ? SCInvoke
   : M extends "Subscribe"
@@ -115,7 +115,7 @@ export type Params<
 
 export type Echo = String[];
 
-export type Transfer = {
+export type WalletTransfer = {
   amount?: number;
   burn?: number;
   destination?: string;
@@ -223,7 +223,7 @@ export function scinvokeSCArgs(
 }
 
 export type DEROGetGasEstimate = {
-  transfers?: Transfer[];
+  transfers?: WalletTransfer[];
   sc?: string;
   sc_rpc?: Argument<ArgumentType>[];
   signer?: string;
@@ -263,8 +263,8 @@ export type SplitIntegratedAddress = {
 
 export type QueryKey = { key_type: "mnemonic" };
 
-export type Transfer2 = {
-  transfers?: Transfer[];
+export type Transfer = {
+  transfers?: WalletTransfer[];
   sc?: String;
   sc_rpc?: Arguments;
   ringsize?: Uint64;
