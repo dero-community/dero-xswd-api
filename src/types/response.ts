@@ -51,7 +51,7 @@ export type ResultResponse<E extends Entity, M extends Method<E>> = M extends
   ? { key: string }
   : M extends "Subscribe"
   ? boolean
-  : M extends "transfer"
+  : M extends "transfer" | "scinvoke"
   ? { txid: string }
   : M extends "GetTransferbyTXID"
   ? GetTransferByTXIDResult
@@ -168,9 +168,7 @@ type DEROGetBlockHeaderResult = {
   };
 } & Status;
 
-type DEROGetTxPoolResult = {
-  //status: "OK";
-} & Status;
+type DEROGetTxPoolResult = {} & Status;
 
 type DEROGetTransactionResult = {
   txs_as_hex: null;
@@ -215,12 +213,15 @@ export type Entry = {
   payload_rpc: {
     name: string;
     datatype: "S" | "U";
-    value: string | number; //? //TODO better typing?
+    value: String | Uint64;
   }[];
   sender: string;
   dstport: number;
   srcport: number;
 };
+
+export type Topoheight = Uint64;
+export type Balance = Uint64;
 
 type GetTransfersResult = {
   entries: Entry[];
@@ -232,15 +233,15 @@ type GetTransferByTXIDResult = {
 };
 
 type DEROGetSCResult = {
-  valuesuint64: string[];
+  valuesuint64: Uint64[];
   valuesstring: string[];
   valuesbytes: string[];
   stringkeys: {
     C: string;
-    [k: string]: string;
+    [k: string]: String | Uint64;
   };
   uint64keys: {
-    [k: number]: number;
+    [k: Uint64]: String | Uint64;
   };
   balances: {
     [scid: Hash]: Uint64;

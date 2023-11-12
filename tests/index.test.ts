@@ -31,32 +31,36 @@ End Function
 async function installTestSC(): Promise<{ txid: string }> {
   return installSC("http://127.0.0.1:30000/install_sc", TEST_SC);
 }
-
+//! Need to fill with another valid address to test transfers
+let address2 =
+  "deto1qyre7td6x9r88y4cavdgpv6k7lvx6j39lfsx420hpvh3ydpcrtxrxqg8v8e3z";
 let xswd = new Api(appInfo);
 let scid: string;
 let address: string;
-let transfer: string;
 
 async function createCaptainName() {
-  return await xswd.wallet.scinvoke(
-    {
-      scid: NAME_SERVICE,
-      ringsize: 2,
-      sc_rpc: [
-        {
-          name: "entrypoint",
-          datatype: "S",
-          value: "Register",
-        },
-        {
-          name: "name",
-          datatype: "S",
-          value: "captain",
-        },
-      ],
-    },
-    true
-  );
+  const response = await xswd.wallet.scinvoke({
+    scid: NAME_SERVICE,
+    ringsize: 2,
+    sc_rpc: [
+      {
+        name: "entrypoint",
+        datatype: "S",
+        value: "Register",
+      },
+      {
+        name: "name",
+        datatype: "S",
+        value: "captain",
+      },
+    ],
+  });
+  const [error, result] = to<"wallet", "scinvoke", Result>(response);
+  if (error || result === undefined) {
+    throw error?.message;
+  }
+
+  await xswd.waitFor("new_entry", (v) => v.txid == result?.txid);
 }
 
 beforeAll(async () => {
@@ -66,20 +70,11 @@ beforeAll(async () => {
   scid = txid;
   const addressResponse = await xswd.wallet.GetAddress();
   address = "result" in addressResponse ? addressResponse.result.address : "";
+  await xswd.subscribe({ event: "new_entry" });
+  await xswd.subscribe({ event: "new_topoheight" });
+  await xswd.subscribe({ event: "new_balance" });
   await createCaptainName();
-  const transferResponse = await xswd.wallet.transfer(
-    {
-      scid: DERO,
-      amount: 1000,
-      destination: address,
-    },
-    true
-  );
-  if ("error" in transferResponse) {
-    throw "could not transfer" + transferResponse.error.message;
-  }
-  transfer = transferResponse.result.txid;
-}, TIMEOUT);
+}, TIMEOUT * 2);
 
 describe("commands", () => {
   describe("node", () => {
@@ -311,8 +306,26 @@ describe("commands", () => {
       expect(result?.height).toBeGreaterThanOrEqual(0);
     });
     test("GetTransferbyTXID", async () => {
+      const transferResponse = await xswd.wallet.transfer({
+        transfers: [
+          {
+            scid: DERO,
+            amount: 10000,
+            destination: address2,
+          },
+        ],
+      });
+      const [transferError, transferResult] = to<"wallet", "transfer", Result>(
+        transferResponse
+      );
+      if (transferError || transferResult === undefined) {
+        throw transferError?.message;
+      }
+
+      await xswd.waitFor("new_entry", (v) => v.txid === transferResult.txid);
+
       const response = await xswd.wallet.GetTransferbyTXID({
-        txid: transfer,
+        txid: transferResult.txid,
       });
 
       const [error /*resultResponse*/] = to<
@@ -388,9 +401,13 @@ describe("commands", () => {
 
     test("transfer", async () => {
       const response = await xswd.wallet.transfer({
-        scid: DERO,
-        amount: 1000,
-        destination: address,
+        transfers: [
+          {
+            scid: DERO,
+            amount: 1000,
+            destination: address2,
+          },
+        ],
       });
 
       const [error /*resultResponse*/] = to<"wallet", "transfer", Result>(
@@ -399,6 +416,7 @@ describe("commands", () => {
       expect(error).toBeUndefined();
       // expect(resultResponse) // TODO
     });
+
     test("transfer2", async () => {
       const response = await xswd.wallet.transfer({
         transfers: [],
@@ -433,12 +451,6 @@ describe("events", () => {
   test(
     "new_balance",
     async () => {
-      const addressResponse = await xswd.wallet.GetAddress();
-
-      if ("error" in addressResponse) {
-        throw "cannot get address";
-      }
-      const address = addressResponse.result.address;
       const response = await xswd.wallet.GetBalance();
       if ("error" in response) {
         throw "cannot get balance: " + response.error.message;
@@ -452,8 +464,9 @@ describe("events", () => {
         },
       });
 
-      //! panics => need to find a way to test with another address
-      await xswd.wallet.transfer({ amount: 100000, destination: address });
+      await xswd.wallet.transfer({
+        transfers: [{ amount: 100000, destination: address2 }],
+      });
 
       await xswd.waitFor("new_balance");
     },

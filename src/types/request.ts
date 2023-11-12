@@ -116,8 +116,8 @@ export type Params<
 export type Echo = String[];
 
 export type WalletTransfer = {
-  amount?: number;
-  burn?: number;
+  amount?: Uint64;
+  burn?: Uint64;
   destination?: string;
   scid?: Hash;
   payload_rpc?: Arguments;

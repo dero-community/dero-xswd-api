@@ -22,7 +22,7 @@ import {
 } from "./types/request";
 import { AppInfo, EventType } from "./types/types";
 import makeDebug from "./debug";
-import { Response, Result, Entry } from "./types/response";
+import { Entry, Balance, Topoheight } from "./types/response";
 
 const debug = makeDebug("xswd");
 
@@ -30,10 +30,16 @@ export class Api {
   _connection: Connection;
   initialized: boolean = false;
 
-  constructor(appInfo: AppInfo) {
+  constructor(
+    appInfo: AppInfo,
+    config?: {
+      ip: string;
+      port: number;
+    }
+  ) {
     debug("creating connection");
     checkAppInfo(appInfo);
-    this._connection = new Connection(appInfo);
+    this._connection = new Connection(appInfo, config);
   }
 
   async initialize() {
@@ -73,10 +79,16 @@ export class Api {
     return false;
   }
 
-  async waitFor(
-    event: EventType,
-    predicate?: (eventValue: Entry | any) => boolean
-  ) {
+  async waitFor<
+    ET extends EventType,
+    EV = ET extends "new_balance"
+      ? Balance
+      : ET extends "new_topoheight"
+      ? Topoheight
+      : ET extends "new_entry"
+      ? Entry
+      : unknown
+  >(event: ET, predicate?: (eventValue: EV) => boolean): Promise<EV> {
     return await this._connection._checkEvent(event, predicate);
   }
 
@@ -158,10 +170,7 @@ export class Api {
         params,
       });
     },
-    async transfer(params: Transfer, waitForEntry?: boolean) {
-      if (waitForEntry === true) {
-        this._api.subscribe({ event: "new_entry" }, "auto");
-      }
+    async transfer(params: Transfer) {
       const response = await this._api._connection.sendSync(
         "wallet",
         "transfer",
@@ -171,35 +180,9 @@ export class Api {
           params,
         }
       );
-
-      if ("error" in response) {
-        throw "could not transfer: " + response.error.message;
-      }
-      if (
-        !(
-          typeof response.result == "object" &&
-          response.result != null &&
-          "txid" in response.result
-        )
-      ) {
-        throw "could not transfer: unknown error";
-      }
-
-      if (waitForEntry) {
-        return {
-          result: await this._api.waitFor(
-            "new_entry",
-            (eventValue) =>
-              eventValue.txid === (response.result as Entry).txid
-          ),
-        } as Response<"wallet", "GetTransferbyTXID", Result>;
-      }
       return response;
     },
-    async scinvoke(params: SCInvoke, waitForEntry?: boolean) {
-      if (waitForEntry === true) {
-        this._api.subscribe({ event: "new_entry" }, "auto");
-      }
+    async scinvoke(params: SCInvoke) {
       const response = await this._api._connection.sendSync(
         "wallet",
         "scinvoke",
@@ -213,25 +196,7 @@ export class Api {
       if ("error" in response) {
         throw "could not scinvoke: " + response.error.message;
       }
-      if (
-        !(
-          typeof response.result == "object" &&
-          response.result != null &&
-          "txid" in response.result
-        )
-      ) {
-        throw "could not scinvoke: unknown error";
-      }
 
-      if (waitForEntry) {
-        return {
-          result: await this._api.waitFor(
-            "new_entry",
-            (eventValue) =>
-              eventValue.txid === (response.result as Entry).txid
-          ),
-        } as Response<"wallet", "GetTransferbyTXID", Result>;
-      }
       return response;
     },
   };

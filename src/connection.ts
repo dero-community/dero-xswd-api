@@ -55,8 +55,12 @@ export default class Connection {
   buffer: string = "";
   timeouts: Set<any> = new Set();
 
-  constructor(appInfo: AppInfo) {
+  constructor(appInfo: AppInfo, config?: { ip: string; port: number }) {
     this.appInfo = appInfo;
+    if (config) {
+      this.ip = config.ip;
+      this.port = config.port;
+    }
   }
   async close() {
     console.warn("closing websocket", this.timeouts);
@@ -96,6 +100,7 @@ export default class Connection {
         try {
           // default parsing a single message
           data = JSON.parse(message.data.toString());
+          debug("WebSocket:onmessage", { data });
         } catch (error) {
           // sometimes the result is split in multiple message so we need to buffer
           this.buffer = this.buffer + message.data.toString();
