@@ -18,6 +18,7 @@ import {
   DEROGetTransaction,
   DERONameToAddress,
   Transfer,
+  GetBalance,
 } from "./types/request";
 import { AppInfo, EventType } from "./types/types";
 import makeDebug from "./debug";
@@ -96,11 +97,11 @@ export class Api {
         params: undefined,
       });
     },
-    async GetBalance() {
+    async GetBalance(params: GetBalance = {}) {
       return await this._api._connection.sendSync("wallet", "GetBalance", {
         jsonrpc: "2.0",
         method: "GetBalance",
-        params: undefined,
+        params,
       });
     },
     async GetHeight() {

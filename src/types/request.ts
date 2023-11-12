@@ -41,6 +41,7 @@ export type Method<E extends Entity> = E extends "daemon"
       | "GetAddress"
       | "GetBalance"
       | "GetHeight"
+      | "GetBalance"
       | "GetTransferbyTXID"
       | "GetTransfers"
       | "MakeIntegratedAddress"
@@ -92,7 +93,7 @@ export type Params<
   : M extends "GetAddress"
   ? undefined
   : M extends "GetBalance"
-  ? undefined
+  ? GetBalance
   : M extends "GetHeight"
   ? undefined
   : M extends "GetTransferbyTXID"
@@ -232,6 +233,10 @@ export type DEROGetGasEstimate = {
 export type DERONameToAddress = {
   name: String;
   topoheight: Uint64;
+};
+
+export type GetBalance = {
+  scid?: Hash;
 };
 
 export type GetTransferbyTXID = {
