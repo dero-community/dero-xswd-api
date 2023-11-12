@@ -60,8 +60,8 @@ For daemon calls use: `xswd.node.<command>`
 
 For wallet calls use: `xswd.wallet.<command>`
 
->*Note:* calls like `xswd.wallet.transfer` & `xswd.wallet.scinvoke` have an additional *boolean* parameter to automatically wait for a new_entry event after the call.
->Similarly, the `xswd.node.GetSC` has an optional parameter in order to wait for a new block before it fetches the data.
+>*Note:* calls like `xswd.wallet.transfer` & `xswd.wallet.scinvoke` should wait for a *new_entry* event after the call using the `xswd.waitFor` method (examples below).
+>Also, the `xswd.node.GetSC` has an optional parameter in order to wait for a new block before it fetches the data (using `waitFor` underneath).
 
 ##### Example (Typescript)
 ```ts
@@ -86,6 +86,8 @@ if (result !== undefined) {
 }
 ```
 
+check [tests](tests/index.test.ts) file for more examples.
+
 #### Events
 
 ##### Subscribe to an event (Typescript)
@@ -106,14 +108,14 @@ await xswd.waitFor("new_balance")
 
 // add a predicate
 await xswd.waitFor("new_topoheight", 
-  (new_height: number) => new_height > 2394
+  (new_height) => new_height > 2394
 )
 
 // you can add a callback to the subscription
 await xswd.subscribe({
   event: "new_balance",
-  callback: (result: any) => {
-    console.log(result);
+  callback: (balance) => {
+    console.log(balance);
   },
 });
 ```
