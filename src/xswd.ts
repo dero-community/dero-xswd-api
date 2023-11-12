@@ -22,7 +22,7 @@ import {
 } from "./types/request";
 import { AppInfo, EventType } from "./types/types";
 import makeDebug from "./debug";
-import { Response, Result, TransferResult } from "./types/response";
+import { Response, Result, Entry } from "./types/response";
 
 const debug = makeDebug("xswd");
 
@@ -75,7 +75,7 @@ export class Api {
 
   async waitFor(
     event: EventType,
-    predicate?: (eventValue: TransferResult | any) => boolean
+    predicate?: (eventValue: Entry | any) => boolean
   ) {
     return await this._connection._checkEvent(event, predicate);
   }
@@ -190,7 +190,7 @@ export class Api {
           result: await this._api.waitFor(
             "new_entry",
             (eventValue) =>
-              eventValue.txid === (response.result as TransferResult).txid
+              eventValue.txid === (response.result as Entry).txid
           ),
         } as Response<"wallet", "GetTransferbyTXID", Result>;
       }
@@ -228,7 +228,7 @@ export class Api {
           result: await this._api.waitFor(
             "new_entry",
             (eventValue) =>
-              eventValue.txid === (response.result as TransferResult).txid
+              eventValue.txid === (response.result as Entry).txid
           ),
         } as Response<"wallet", "GetTransferbyTXID", Result>;
       }
