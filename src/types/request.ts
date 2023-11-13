@@ -281,7 +281,7 @@ export type SCInvoke = {
   scid: String;
   sc_rpc: Arguments;
 
-  sc_dero_deposit?: boolean;
-  sc_token_deposit?: boolean;
+  sc_dero_deposit?: Uint64;
+  sc_token_deposit?: Uint64;
   ringsize?: Uint64;
 };

@@ -233,11 +233,11 @@ type GetTransferByTXIDResult = {
 };
 
 type DEROGetSCResult = {
-  valuesuint64: Uint64[];
-  valuesstring: string[];
-  valuesbytes: string[];
+  valuesuint64: String[];
+  valuesstring: String[];
+  valuesbytes: String[];
   stringkeys: {
-    C: string;
+    C: String;
     [k: string]: String | Uint64;
   };
   uint64keys: {
@@ -247,7 +247,7 @@ type DEROGetSCResult = {
     [scid: Hash]: Uint64;
   };
   balance: Uint64;
-  code: string;
+  code: String;
 } & Status;
 
 type DEROGetGasEstimateResult = {
