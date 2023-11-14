@@ -1,4 +1,5 @@
 export type Uint64 = number; // bigint ?
+export type DVMString = string;
 export type Hash = string;
 export type DataType = "S" | "U" | "H";
 

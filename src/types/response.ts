@@ -1,5 +1,5 @@
 import { Method } from "./request";
-import { Entity, EventType, Hash, Uint64 } from "./types";
+import { DVMString, Entity, EventType, Hash, Uint64 } from "./types";
 
 export type Result = "error" | "result";
 
@@ -10,7 +10,7 @@ export type ResultResponse<E extends Entity, M extends Method<E>> = M extends
   | "Echo"
   ? string[]
   : M extends "DERO.Ping"
-  ? "Pong " // TODO
+  ? "Pong "
   : M extends "DERO.GetInfo"
   ? DEROGetInfoResult
   : M extends "DERO.GetBlock"
@@ -213,7 +213,7 @@ export type Entry = {
   payload_rpc: {
     name: string;
     datatype: "S" | "U";
-    value: String | Uint64;
+    value: DVMString | Uint64;
   }[];
   sender: string;
   dstport: number;
@@ -233,21 +233,21 @@ type GetTransferByTXIDResult = {
 };
 
 type DEROGetSCResult = {
-  valuesuint64: String[];
-  valuesstring: String[];
-  valuesbytes: String[];
+  valuesuint64: DVMString[];
+  valuesstring: DVMString[];
+  valuesbytes: DVMString[];
   stringkeys: {
-    C: String;
-    [k: string]: String | Uint64;
+    C: DVMString;
+    [k: string]: DVMString | Uint64;
   };
   uint64keys: {
-    [k: Uint64]: String | Uint64;
+    [k: Uint64]: DVMString | Uint64;
   };
   balances: {
     [scid: Hash]: Uint64;
   };
   balance: Uint64;
-  code: String;
+  code: DVMString;
 } & Status;
 
 type DEROGetGasEstimateResult = {
@@ -259,7 +259,7 @@ type DEROGetBlockTemplateResult = {
   jobid: string;
   blocktemplate_blob: string;
   blockhashing_blob: string;
-  difficulty: String;
+  difficulty: DVMString;
   difficultyuint64: Uint64;
   height: Uint64;
   prev_hash: Hash;

@@ -1,10 +1,9 @@
-import { Entity, EventType, Hash, Uint64 } from "./types";
+import { DVMString, Entity, EventType, Hash, Uint64 } from "./types";
 
 export type JSONRPCRequest = {
   method: "POST";
   headers: {
     "Content-Type": "application/json";
-    //"Content-Security-Policy": string;
   };
   body: JSONRPCRequestBody<Entity, Method<Entity>>;
 };
@@ -113,7 +112,7 @@ export type Params<
   ? { event: EventType }
   : Echo;
 
-export type Echo = String[];
+export type Echo = DVMString[];
 
 export type WalletTransfer = {
   amount?: Uint64;
@@ -123,10 +122,14 @@ export type WalletTransfer = {
   payload_rpc?: Arguments;
 };
 
-type ArgumentType = Uint64 | String | Hash;
+type ArgumentType = Uint64 | DVMString | Hash;
 type Argument<AT extends ArgumentType> = {
-  name: String;
-  datatype: AT extends Uint64 ? "U" : AT extends Hash ? "H" : "S";
+  name: DVMString;
+  datatype: AT extends Uint64
+    ? "U"
+    : AT extends Hash | String
+    ? "H" | "S"
+    : unknown;
   value: AT;
 };
 
@@ -155,20 +158,20 @@ export type DEROGetTransaction = {
 };
 
 export type DEROSendRawTransaction = {
-  tx_as_hex: String;
+  tx_as_hex: DVMString;
 };
 
 export type DEROGetBlockTemplate = {
-  wallet_address: String;
+  wallet_address: DVMString;
   block?: boolean;
-  miner?: String;
+  miner?: DVMString;
 };
 
 export type DEROGetEncryptedBalance = {
-  address: String;
+  address: DVMString;
   topoheight: Uint64;
   scid?: Hash;
-  treehash?: string;
+  treehash?: Hash;
 };
 
 export type DEROGetSC = {
@@ -177,14 +180,14 @@ export type DEROGetSC = {
   variables?: boolean;
   topoheight?: Uint64;
   keysuint64?: Uint64[];
-  keysstring?: String[];
+  keysstring?: DVMString[];
   keysbytes?: Int8Array[];
 };
 
 export function gasEstimateSCArgs(
   scid: Hash,
   entrypoint: string,
-  args: { name: string; value: String | Uint64 }[]
+  args: { name: string; value: DVMString | Uint64 }[]
 ): Argument<ArgumentType>[] {
   return [
     {
@@ -203,12 +206,12 @@ export function gasEstimateSCArgs(
 
 export function scinvokeSCArgs(
   entrypoint: string,
-  args: { name: string; value: String | Uint64 }[]
+  args: { name: string; value: DVMString | Uint64 }[]
 ): Argument<ArgumentType>[] {
   const formattedArgs: Argument<ArgumentType>[] = args.map(
     ({ name, value }) => ({
       name,
-      datatype: typeof value == "number" ? "U" : "S",
+      datatype: typeof value == "number" ? "U" : "S", //? bigint?
       value,
     })
   );
@@ -230,7 +233,7 @@ export type DEROGetGasEstimate = {
 };
 
 export type DERONameToAddress = {
-  name: String;
+  name: DVMString;
   topoheight: Uint64;
 };
 
@@ -239,7 +242,7 @@ export type GetBalance = {
 };
 
 export type GetTransferbyTXID = {
-  hash?: string;
+  hash?: Hash;
   txid?: Hash;
 };
 
@@ -250,35 +253,35 @@ export type GetTransfers = {
   out?: boolean;
   min_height?: Uint64;
   max_height?: Uint64;
-  sender?: String;
-  receiver?: String;
+  sender?: DVMString;
+  receiver?: DVMString;
   dstport?: Uint64;
   srcport?: Uint64;
 };
 
 export type MakeIntegratedAddress = {
-  address?: String;
+  address?: DVMString;
   payload_rpc?: Argument<ArgumentType>;
 };
 
 export type SplitIntegratedAddress = {
-  integrated_address: String;
+  integrated_address: DVMString;
 };
 
 export type QueryKey = { key_type: "mnemonic" };
 
 export type Transfer = {
   transfers?: WalletTransfer[];
-  sc?: String;
+  sc?: DVMString;
   sc_rpc?: Arguments;
   ringsize?: Uint64;
-  scid?: String;
+  scid?: DVMString;
   fees?: Uint64;
-  signer?: String;
+  signer?: DVMString;
 };
 
 export type SCInvoke = {
-  scid: String;
+  scid: DVMString;
   sc_rpc: Arguments;
 
   sc_dero_deposit?: Uint64;
