@@ -1,4 +1,12 @@
-import { DVMString, Entity, EventType, Hash, Uint64 } from "./types";
+import {
+  Address,
+  DVMString,
+  Entity,
+  EventType,
+  Hash,
+  SCCode,
+  Uint64,
+} from "./types";
 
 export type JSONRPCRequest = {
   method: "POST";
@@ -127,7 +135,7 @@ type Argument<AT extends ArgumentType> = {
   name: DVMString;
   datatype: AT extends Uint64
     ? "U"
-    : AT extends Hash | String
+    : AT extends Hash | DVMString
     ? "H" | "S"
     : unknown;
   value: AT;
@@ -184,6 +192,7 @@ export type DEROGetSC = {
   keysbytes?: Int8Array[];
 };
 
+// TODO rename transferSCArgs, used in both transfer and gasEstimate
 export function gasEstimateSCArgs(
   scid: Hash,
   entrypoint: string,
@@ -227,9 +236,9 @@ export function scinvokeSCArgs(
 
 export type DEROGetGasEstimate = {
   transfers?: WalletTransfer[];
-  sc?: string;
+  sc?: SCCode;
   sc_rpc?: Argument<ArgumentType>[];
-  signer?: string;
+  signer?: Address;
 };
 
 export type DERONameToAddress = {
@@ -272,16 +281,16 @@ export type QueryKey = { key_type: "mnemonic" };
 
 export type Transfer = {
   transfers?: WalletTransfer[];
-  sc?: DVMString;
+  sc?: SCCode;
   sc_rpc?: Arguments;
   ringsize?: Uint64;
-  scid?: DVMString;
+  scid?: Hash;
   fees?: Uint64;
-  signer?: DVMString;
+  signer?: Address;
 };
 
 export type SCInvoke = {
-  scid: DVMString;
+  scid: Hash;
   sc_rpc: Arguments;
 
   sc_dero_deposit?: Uint64;

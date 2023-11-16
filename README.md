@@ -119,3 +119,8 @@ await xswd.subscribe({
   },
 });
 ```
+
+# Roadmap
+
+- [x] base protocol
+- [ ] fallback to public daemon if connection failed (by default, can be disabled)

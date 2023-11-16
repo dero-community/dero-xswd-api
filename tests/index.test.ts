@@ -1,6 +1,6 @@
 import { describe, expect, beforeAll, test } from "@jest/globals";
 import { Api } from "../src/xswd";
-import { AppInfo } from "../src/types/types";
+import { AppInfo, Hash } from "../src/types/types";
 import { sleep, to } from "../src/utils";
 import { Result } from "../src/types/response";
 import { ADDRESS_LENGTH, DERO, NAME_SERVICE, installSC } from "./utils";
@@ -35,7 +35,7 @@ async function installTestSC(): Promise<{ txid: string }> {
 let address2 =
   "deto1qyre7td6x9r88y4cavdgpv6k7lvx6j39lfsx420hpvh3ydpcrtxrxqg8v8e3z";
 let xswd = new Api(appInfo);
-let scid: string;
+let scid: Hash;
 let address: string;
 
 async function createCaptainName() {

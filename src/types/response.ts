@@ -1,5 +1,5 @@
 import { Method } from "./request";
-import { DVMString, Entity, EventType, Hash, Uint64 } from "./types";
+import { DVMString, Entity, EventType, Hash, SCCode, Uint64 } from "./types";
 
 export type Result = "error" | "result";
 
@@ -237,7 +237,7 @@ type DEROGetSCResult = {
   valuesstring: DVMString[];
   valuesbytes: DVMString[];
   stringkeys: {
-    C: DVMString;
+    C: SCCode;
     [k: string]: DVMString | Uint64;
   };
   uint64keys: {

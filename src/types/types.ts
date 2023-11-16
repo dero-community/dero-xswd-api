@@ -1,6 +1,8 @@
 export type Uint64 = number; // bigint ?
 export type DVMString = string;
 export type Hash = string;
+export type SCCode = string;
+export type Address = string;
 export type DataType = "S" | "U" | "H";
 
 export type Stringkeys = { [key: string]: number | string };
