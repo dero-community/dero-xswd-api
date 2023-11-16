@@ -91,7 +91,7 @@ type Status = { status: "OK" };
 
 type DEROGetInfoResult = {
   alt_blocks_count: Uint64;
-  difficulty: Uint64;
+  difficulty: string;
   grey_peerlist_size: number;
   height: Uint64;
   stableheight: Uint64;
@@ -259,7 +259,7 @@ type DEROGetBlockTemplateResult = {
   jobid: string;
   blocktemplate_blob: string;
   blockhashing_blob: string;
-  difficulty: DVMString;
+  difficulty: string;
   difficultyuint64: Uint64;
   height: Uint64;
   prev_hash: Hash;
