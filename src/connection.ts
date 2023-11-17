@@ -20,7 +20,25 @@ const METHOD_TIMEOUT = 20000;
 const BLOCK_TIMEOUT = 30000;
 const INTERVAL = 100;
 
-export default class Connection {
+abstract class Connection {
+  id = 1;
+  constructor() {}
+  abstract initialize(): Promise<boolean>;
+  abstract close(): void;
+
+  abstract sendSync<E extends Entity, M extends Method<E>>(
+    entity: E,
+    method: M,
+    body: Omit<JSONRPCRequestBody<typeof entity, typeof method>, "id">
+  ): Promise<Response<E, M, "error"> | Response<E, M, "result">>;
+
+  abstract _checkEvent(
+    eventType: EventType,
+    predicate?: (eventValue: any) => boolean
+  ): Promise<any>;
+}
+
+class XSWDConnection extends Connection {
   websocket: WebSocket | undefined;
   ip = "localhost";
   port = 44326;
@@ -51,11 +69,11 @@ export default class Connection {
     },
   };
   appInfo: AppInfo;
-  id = 1;
   buffer: string = "";
   timeouts: Set<any> = new Set();
 
   constructor(appInfo: AppInfo, config?: { ip: string; port: number }) {
+    super();
     this.appInfo = appInfo;
     if (config) {
       this.ip = config.ip;
@@ -187,7 +205,7 @@ export default class Connection {
     }
   }
 
-  send(
+  private send(
     entity: Entity,
     method: Method<typeof entity>,
     body: Omit<JSONRPCRequestBody<typeof entity, typeof method>, "id">
@@ -294,3 +312,65 @@ export default class Connection {
     });
   }
 }
+
+class FallbackConnection extends Connection {
+  url: string;
+  events = {};
+
+  constructor({ ip, port }: { ip: string; port: number }) {
+    super();
+    this.url = `https://${ip}:${port}/json_rpc`;
+  }
+
+  async sendSync<E extends Entity, M extends Method<E>>(
+    entity: E,
+    method: M,
+    body: Omit<JSONRPCRequestBody<E, M>, "id">
+  ): Promise<Response<E, M, "error"> | Response<E, M, "result">> {
+    const id = this.id++;
+    const bodyWithId: JSONRPCRequestBody<Entity, Method<Entity>> = {
+      ...body,
+      id,
+    };
+
+    debug({ bodyWithId });
+    const response = await fetch(this.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(bodyWithId),
+    });
+
+    const json = await response.json();
+
+    debug({ response: json }); // TODO
+
+    return json;
+  }
+
+  //
+  // Inactive methods
+  //
+
+  initialize(): Promise<boolean> {
+    return new Promise((resolve) => resolve(true));
+  }
+  close(): void {}
+
+  send(
+    entity: Entity,
+    method: Method<Entity>,
+    body: Omit<JSONRPCRequestBody<Entity, Method<Entity>>, "id">
+  ): number {
+    throw "Connection.send() shall not be used in fallback mode";
+  }
+  _checkEvent(
+    eventType: EventType,
+    predicate?: ((eventValue: any) => boolean) | undefined
+  ): Promise<any> {
+    throw "Connection._checkEvent() shall not be used in fallback mode";
+  }
+}
+
+export { XSWDConnection, Connection, FallbackConnection };
