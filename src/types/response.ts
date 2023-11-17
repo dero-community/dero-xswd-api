@@ -91,7 +91,7 @@ type Status = { status: "OK" };
 
 type DEROGetInfoResult = {
   alt_blocks_count: Uint64;
-  difficulty: string;
+  difficulty: Uint64;
   grey_peerlist_size: number;
   height: Uint64;
   stableheight: Uint64;
