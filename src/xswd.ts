@@ -76,8 +76,9 @@ export class Api {
   }
 
   async initialize() {
-    let initialisation;
+    let initialisation = false;
     this._connection = new XSWDConnection(this.appInfo, this.config);
+
     try {
       initialisation = await this._connection.initialize();
       debug({ initialisation });
