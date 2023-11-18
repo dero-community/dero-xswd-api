@@ -354,7 +354,7 @@ class FallbackConnection extends Connection {
   //
 
   initialize(): Promise<boolean> {
-    return new Promise((resolve) => resolve(true));
+    return new Promise((resolve) => resolve(false));
   }
   close(): void {}
 

@@ -45,7 +45,8 @@ export class Api {
   _connection: Connection;
   fallback_http_rpc: { ip: string; port: number } | null = null;
   initialized: boolean = false;
-
+  appInfo: AppInfo;
+  config: { ip: string; port: number } | undefined;
   constructor(
     appInfo: AppInfo,
     config?: {
@@ -65,6 +66,8 @@ export class Api {
   ) {
     debug("creating connection");
     checkAppInfo(appInfo);
+    this.appInfo = appInfo;
+    this.config = config;
     this._connection = new XSWDConnection(appInfo, config);
 
     if (fallback_http_rpc) {
@@ -74,6 +77,7 @@ export class Api {
 
   async initialize() {
     let initialisation;
+    this._connection = new XSWDConnection(this.appInfo, this.config);
     try {
       initialisation = await this._connection.initialize();
       debug({ initialisation });
