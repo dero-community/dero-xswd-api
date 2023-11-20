@@ -319,7 +319,11 @@ class FallbackConnection extends Connection {
 
   constructor({ ip, port }: { ip: string; port: number }) {
     super();
-    this.url = `https://${ip}:${port}/json_rpc`;
+    if (/https?:\/\/.*/.test(ip)) {
+      this.url = `${ip}:${port}/json_rpc`;
+    } else {
+      this.url = `https://${ip}:${port}/json_rpc`;
+    }
   }
 
   async sendSync<E extends Entity, M extends Method<E>>(
