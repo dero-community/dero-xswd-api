@@ -34,7 +34,7 @@ const appInfo: AppInfo = {
 const xswd = new Api(appInfo);
 
 // Initialize the connection => Will require to confirm in your wallet
-const result = await xswd.initialize();
+await xswd.initialize();
 ```
 ##### Javascript
 ```js
@@ -51,7 +51,7 @@ const appInfo = {
 
 const xswd = new Api(appInfo);
 
-const result = await xswd.initialize();
+await xswd.initialize();
 ```
 
 #### Calls
@@ -123,4 +123,5 @@ await xswd.subscribe({
 # Roadmap
 
 - [x] base protocol
-- [ ] fallback to public daemon if connection failed (by default, can be disabled)
+- [x] fallback to public daemon if connection failed (by default, can be disabled)
+- [ ] implement new node GetSC methods
