@@ -2,7 +2,6 @@ import { describe, expect, beforeAll, test } from "@jest/globals";
 import { Api } from "../src/xswd";
 import { AppInfo, Hash } from "../src/types/types";
 import { sleep, to } from "../src/utils";
-import { Result } from "../src/types/response";
 import { ADDRESS_LENGTH, DERO, NAME_SERVICE, installSC } from "./utils";
 import { gasEstimateSCArgs, scinvokeSCArgs } from "../src/types/request";
 import { TextEncoder, TextDecoder } from "util";
@@ -55,7 +54,7 @@ async function createCaptainName() {
       },
     ],
   });
-  const [error, result] = to<"wallet", "scinvoke", Result>(response);
+  const [error, result] = to<"wallet", "scinvoke">(response);
   if (error || result === undefined) {
     throw error?.message;
   }
@@ -103,14 +102,14 @@ describe("commands", () => {
     test("DERO.GetInfo", async () => {
       const response = await xswd.node.GetInfo();
 
-      const [error, result] = to<"daemon", "DERO.GetInfo", Result>(response);
+      const [error, result] = to<"daemon", "DERO.GetInfo">(response);
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
     });
 
     test("DERO.GetBlock", async () => {
       const response = await xswd.node.GetBlock({});
-      const [error, result] = to<"daemon", "DERO.GetBlock", Result>(response);
+      const [error, result] = to<"daemon", "DERO.GetBlock">(response);
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
     });
@@ -119,11 +118,9 @@ describe("commands", () => {
       const response = await xswd.node.GetBlockHeaderByTopoHeight({
         topoheight: 0,
       });
-      const [error, result] = to<
-        "daemon",
-        "DERO.GetBlockHeaderByTopoHeight",
-        Result
-      >(response);
+      const [error, result] = to<"daemon", "DERO.GetBlockHeaderByTopoHeight">(
+        response
+      );
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
     });
@@ -137,11 +134,9 @@ describe("commands", () => {
         const response = await xswd.node.GetBlockHeaderByHash({
           hash,
         });
-        const [error, result] = to<
-          "daemon",
-          "DERO.GetBlockHeaderByHash",
-          Result
-        >(response);
+        const [error, result] = to<"daemon", "DERO.GetBlockHeaderByHash">(
+          response
+        );
         expect(error).toBeUndefined();
         expect(result?.status).toBe("OK");
       } else {
@@ -151,16 +146,14 @@ describe("commands", () => {
 
     test("DERO.GetTxPool", async () => {
       const response = await xswd.node.GetTxPool();
-      const [error, result] = to<"daemon", "DERO.GetTxPool", Result>(response);
+      const [error, result] = to<"daemon", "DERO.GetTxPool">(response);
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
     });
 
     test("DERO.GetRandomAddress", async () => {
       const response = await xswd.node.GetRandomAddress();
-      const [error, result] = to<"daemon", "DERO.GetRandomAddress", Result>(
-        response
-      );
+      const [error, result] = to<"daemon", "DERO.GetRandomAddress">(response);
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
     });
@@ -169,9 +162,7 @@ describe("commands", () => {
       const response = await xswd.node.GetTransaction({
         txs_hashes: [],
       });
-      const [error, result] = to<"daemon", "DERO.GetTransaction", Result>(
-        response
-      );
+      const [error, result] = to<"daemon", "DERO.GetTransaction">(response);
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
       expect(result?.txs).toBeDefined();
@@ -183,25 +174,21 @@ describe("commands", () => {
 
     test("DERO.GetHeight", async () => {
       const response = await xswd.node.GetHeight();
-      const [error, result] = to<"daemon", "DERO.GetHeight", Result>(response);
+      const [error, result] = to<"daemon", "DERO.GetHeight">(response);
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
     });
 
     test("DERO.GetBlockCount", async () => {
       const response = await xswd.node.GetBlockCount();
-      const [error, result] = to<"daemon", "DERO.GetBlockCount", Result>(
-        response
-      );
+      const [error, result] = to<"daemon", "DERO.GetBlockCount">(response);
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
     });
 
     test("DERO.GetLastBlockHeader", async () => {
       const response = await xswd.node.GetLastBlockHeader();
-      const [error, result] = to<"daemon", "DERO.GetLastBlockHeader", Result>(
-        response
-      );
+      const [error, result] = to<"daemon", "DERO.GetLastBlockHeader">(response);
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
     });
@@ -213,9 +200,7 @@ describe("commands", () => {
         miner: address,
       });
 
-      const [error, result] = to<"daemon", "DERO.GetBlockTemplate", Result>(
-        response
-      );
+      const [error, result] = to<"daemon", "DERO.GetBlockTemplate">(response);
       expect(error).toBeUndefined();
       expect(result?.status).toBe("OK");
     });
@@ -226,7 +211,7 @@ describe("commands", () => {
         topoheight: -1,
       });
 
-      const [error, result] = to<"daemon", "DERO.GetEncryptedBalance", Result>(
+      const [error, result] = to<"daemon", "DERO.GetEncryptedBalance">(
         response
       );
       expect(error).toBeUndefined();
@@ -245,7 +230,7 @@ describe("commands", () => {
           true
         );
 
-        const [error, result] = to<"daemon", "DERO.GetSC", Result>(response);
+        const [error, result] = to<"daemon", "DERO.GetSC">(response);
 
         expect(error).toBeUndefined();
         expect(result?.code == TEST_SC);
@@ -259,9 +244,7 @@ describe("commands", () => {
         signer: address,
       });
 
-      const [error, result] = to<"daemon", "DERO.GetGasEstimate", Result>(
-        response
-      );
+      const [error, result] = to<"daemon", "DERO.GetGasEstimate">(response);
 
       expect(error).toBeUndefined();
       expect(result?.gasstorage).toBeGreaterThan(0);
@@ -272,9 +255,7 @@ describe("commands", () => {
         name: "captain",
         topoheight: -1,
       });
-      const [error, result] = to<"daemon", "DERO.NameToAddress", Result>(
-        response
-      );
+      const [error, result] = to<"daemon", "DERO.NameToAddress">(response);
       expect(error).toBeUndefined();
       expect(result?.address).toBe(address);
     });
@@ -291,20 +272,20 @@ describe("commands", () => {
     test("GetAddress", async () => {
       const response = await xswd.wallet.GetAddress();
 
-      const [error, result] = to<"wallet", "GetAddress", Result>(response);
+      const [error, result] = to<"wallet", "GetAddress">(response);
       expect(error).toBeUndefined();
       expect(result?.address.length).toBe(ADDRESS_LENGTH);
     });
     test("GetBalance", async () => {
       const response = await xswd.wallet.GetBalance();
 
-      const [error, result] = to<"wallet", "GetBalance", Result>(response);
+      const [error, result] = to<"wallet", "GetBalance">(response);
       expect(error).toBeUndefined();
       expect(result?.balance).toBeGreaterThan(0);
     });
     test("GetHeight", async () => {
       const response = await xswd.wallet.GetHeight();
-      const [error, result] = to<"wallet", "GetHeight", Result>(response);
+      const [error, result] = to<"wallet", "GetHeight">(response);
       expect(error).toBeUndefined();
       expect(result?.height).toBeGreaterThanOrEqual(0);
     });
@@ -318,7 +299,7 @@ describe("commands", () => {
           },
         ],
       });
-      const [transferError, transferResult] = to<"wallet", "transfer", Result>(
+      const [transferError, transferResult] = to<"wallet", "transfer">(
         transferResponse
       );
       if (transferError || transferResult === undefined) {
@@ -331,11 +312,9 @@ describe("commands", () => {
         txid: transferResult.txid,
       });
 
-      const [error /*resultResponse*/] = to<
-        "wallet",
-        "GetTransferbyTXID",
-        Result
-      >(response);
+      const [error /*resultResponse*/] = to<"wallet", "GetTransferbyTXID">(
+        response
+      );
       expect(error).toBeUndefined();
       //expect(resultResponse?.result.) // TODO
     });
@@ -345,7 +324,7 @@ describe("commands", () => {
         in: true,
       });
 
-      const [error, result] = to<"wallet", "GetTransfers", Result>(response);
+      const [error, result] = to<"wallet", "GetTransfers">(response);
       expect(error).toBeUndefined();
       expect(result?.entries).not.toBeUndefined();
     });
@@ -360,11 +339,9 @@ describe("commands", () => {
         },
       }); //! Unsolved Error invalid parameters // TODO
 
-      const [error /*resultResponse*/] = to<
-        "wallet",
-        "MakeIntegratedAddress",
-        Result
-      >(response);
+      const [error /*resultResponse*/] = to<"wallet", "MakeIntegratedAddress">(
+        response
+      );
       expect(error).toBeUndefined();
       //expect(resultResponse?.result.entries).toBeEmpty(); // TODO
     });
@@ -377,9 +354,7 @@ describe("commands", () => {
         key_type: "mnemonic",
       });
 
-      const [error /*resultResponse*/] = to<"wallet", "QueryKey", Result>(
-        response
-      );
+      const [error /*resultResponse*/] = to<"wallet", "QueryKey">(response);
       expect(error).toBeUndefined();
       //expect(resultResponse?.result.entries).toBeEmpty(); // TODO
     });
@@ -392,9 +367,7 @@ describe("commands", () => {
           sc_rpc: scinvokeSCArgs("Initialize", []),
         });
 
-        const [error /*resultResponse*/] = to<"wallet", "scinvoke", Result>(
-          response
-        );
+        const [error /*resultResponse*/] = to<"wallet", "scinvoke">(response);
 
         expect(error).toBeUndefined();
         // expect(resultResponse) // TODO
@@ -413,9 +386,7 @@ describe("commands", () => {
         ],
       });
 
-      const [error /*resultResponse*/] = to<"wallet", "transfer", Result>(
-        response
-      );
+      const [error /*resultResponse*/] = to<"wallet", "transfer">(response);
       expect(error).toBeUndefined();
       // expect(resultResponse) // TODO
     });
@@ -427,9 +398,7 @@ describe("commands", () => {
         ringsize: 32,
       });
 
-      const [error /*resultResponse*/] = to<"wallet", "transfer", Result>(
-        response
-      );
+      const [error /*resultResponse*/] = to<"wallet", "transfer">(response);
       expect(error).toBeUndefined();
       // expect(resultResponse) // TODO
     });

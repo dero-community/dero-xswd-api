@@ -27,7 +27,11 @@ export async function sleep(timems: number) {
   await new Promise((r) => setTimeout(r, timems));
 }
 
-export function to<E extends Entity, M extends Method<E>, R extends Result>(
+export function to<
+  E extends Entity,
+  M extends Method<E>,
+  R extends Result = Result
+>(
   response: Response<E, M, R>
 ): [ErrorResponse | undefined, ResultResponse<E, M> | undefined] {
   return [
