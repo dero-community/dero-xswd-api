@@ -1,6 +1,6 @@
 import { describe, expect, beforeAll, test } from "@jest/globals";
 import { Api, AppInfo, Result, to } from "../src";
-import assert from "assert";
+
 import WebSocket from "ws";
 import fetch from "node-fetch";
 
@@ -18,10 +18,7 @@ const appInfo: AppInfo = {
 };
 let xswd = new Api(appInfo);
 
-beforeAll(async () => {
-  const result = await xswd.initialize();
-  assert(!result);
-}, TIMEOUT);
+beforeAll(async () => {}, TIMEOUT);
 
 describe("public daemon", () => {
   test(

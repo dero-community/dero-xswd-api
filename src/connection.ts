@@ -4,7 +4,7 @@ import { AppInfo, Entity, EventType } from "./types/types";
 
 import makeDebug from "./debug";
 import { sleep } from "./utils";
-const debug = makeDebug("connection");
+let debug = makeDebug(false)("connection");
 
 export enum ConnectionState {
   Initializing = "initializing",
@@ -23,8 +23,9 @@ const INTERVAL = 100;
 abstract class Connection {
   id = 1;
   constructor() {}
-  abstract initialize(): Promise<boolean>;
+  abstract initialize(): Promise<void>;
   abstract close(): void;
+  abstract onclose(): void;
 
   abstract sendSync<E extends Entity, M extends Method<E>>(
     entity: E,
@@ -40,8 +41,8 @@ abstract class Connection {
 
 class XSWDConnection extends Connection {
   websocket: WebSocket | undefined;
-  ip = "localhost";
-  port = 44326;
+  ip: string;
+  port: number;
   state = ConnectionState.Initializing;
   responses: { [id: number]: null | any } = {};
   events: {
@@ -72,13 +73,16 @@ class XSWDConnection extends Connection {
   buffer: string = "";
   timeouts: Set<any> = new Set();
 
-  constructor(appInfo: AppInfo, config?: { ip: string; port: number }) {
+  constructor(
+    appInfo: AppInfo,
+    config?: { ip?: string; port?: number; debug?: boolean }
+  ) {
     super();
+    debug = makeDebug(config?.debug || false)("connection");
     this.appInfo = appInfo;
-    if (config) {
-      this.ip = config.ip;
-      this.port = config.port;
-    }
+
+    this.ip = config?.ip || "localhost";
+    this.port = config?.port || 44326;
   }
   async close() {
     console.warn("closing websocket", this.timeouts);
@@ -87,8 +91,10 @@ class XSWDConnection extends Connection {
     this.websocket?.close();
   }
 
+  onclose(): void {}
+
   async initialize() {
-    return new Promise<boolean>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       debug("initialize");
       if (
         this.websocket !== undefined &&
@@ -98,14 +104,9 @@ class XSWDConnection extends Connection {
       }
       this.state = ConnectionState.Initializing;
 
-      try {
-        const url = `ws://${this.ip}:${this.port}/xswd`;
-        this.websocket = new WebSocket(url);
-        debug("websocket created for " + url);
-      } catch (e) {
-        reject(e);
-        return;
-      }
+      const url = `ws://${this.ip}:${this.port}/xswd`;
+      this.websocket = new WebSocket(url);
+      debug("websocket created for " + url);
 
       this.websocket.onmessage = (message) => {
         let data:
@@ -137,16 +138,16 @@ class XSWDConnection extends Connection {
           if (data.accepted === true) {
             this.state = ConnectionState.Accepted;
             debug("connection accepted");
-            resolve(true);
+            resolve();
           } else if (data.accepted === false) {
             this.state = ConnectionState.Refused;
             debug("connection refused", data);
-            resolve(false);
+            reject("connection refused: " + data.message);
           }
         } else if ("error" in data) {
           const errorData: Response<Entity, Method<Entity>, "error"> = data;
           console.error(errorData.error.message);
-          resolve(false);
+          reject(errorData.error.message);
           this.handle(data);
         } else if ("result" in data) {
           if (
@@ -177,8 +178,9 @@ class XSWDConnection extends Connection {
       this.websocket.onclose = () => {
         this.state = ConnectionState.Initializing;
         this.websocket = undefined;
+        this.onclose();
         debug("connection closed");
-        resolve(false);
+        reject("connection closed");
       };
 
       debug("websocket handlers are set");
@@ -317,13 +319,10 @@ class FallbackConnection extends Connection {
   url: string;
   events = {};
 
-  constructor({ ip, port }: { ip: string; port: number }) {
+  constructor(url: string, config?: { debug?: boolean }) {
     super();
-    if (/https?:\/\/.*/.test(ip)) {
-      this.url = `${ip}:${port}/json_rpc`;
-    } else {
-      this.url = `https://${ip}:${port}/json_rpc`;
-    }
+    debug = makeDebug(config?.debug || false)("connection");
+    this.url = `${url}/json_rpc`;
   }
 
   async sendSync<E extends Entity, M extends Method<E>>(
@@ -357,11 +356,11 @@ class FallbackConnection extends Connection {
   // Inactive methods
   //
 
-  initialize(): Promise<boolean> {
-    return new Promise((resolve) => resolve(false));
+  initialize(): Promise<void> {
+    throw "Connection.initialize() shall not be used in fallback mode";
   }
   close(): void {}
-
+  onclose(): void {}
   send(
     entity: Entity,
     method: Method<Entity>,

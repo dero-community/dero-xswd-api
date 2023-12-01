@@ -64,8 +64,11 @@ async function createCaptainName() {
 }
 
 beforeAll(async () => {
-  const result = await xswd.initialize();
-  if (!result) throw "error initializing";
+  await xswd.initialize();
+  console.log({ status: xswd.status });
+
+  console.log("Installing SC");
+
   const { txid } = await installTestSC();
   scid = txid;
   const addressResponse = await xswd.wallet.GetAddress();

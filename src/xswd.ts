@@ -24,12 +24,11 @@ import { AppInfo, EventType } from "./types/types";
 import makeDebug from "./debug";
 import { Entry, Balance, Topoheight } from "./types/response";
 
-const debug = makeDebug("xswd");
+let debug = makeDebug(false)("xswd");
 
-const DEFAULT_FALLBACK_CONFIG = {
-  ip: "dero-api.mysrv.cloud",
-  port: 443,
-};
+const DEFAULT_FALLBACK_CONFIG = "dero-api.mysrv.cloud:443";
+const DEFAULT_CONFIG = { ip: "localhost", port: 44326 };
+
 // https://dero-api.mysrv.cloud/json_rpc
 // dero-node-ca.mysrv.cloud:10102
 // ams.derofoundation.org:11011
@@ -43,59 +42,57 @@ const DEFAULT_FALLBACK_CONFIG = {
 
 export class Api {
   _connection: Connection;
-  fallback_http_rpc: { ip: string; port: number } | null = null;
-  initialized: boolean = false;
+  _xswd_connection: XSWDConnection;
+  status: { initialized: false } | { initialized: true; fallback: boolean } = {
+    initialized: false,
+  };
+  _fallback_connection: FallbackConnection | null = null;
+  fallback_http_rpc: string | null = null;
   appInfo: AppInfo;
-  config: { ip: string; port: number } | undefined;
+  config: { ip?: string; port?: number; debug?: boolean };
+
   constructor(
     appInfo: AppInfo,
     config?: {
-      ip: string;
-      port: number;
+      ip?: string;
+      port?: number;
+      debug?: boolean;
     },
     // if xswd fails to connect, at least connect to a public node
     fallback_http_rpc:
       | false // any falsy means deactivate fallback
       | null
       | undefined
-      | {
-          // else use the user defined config
-          ip: string;
-          port: number;
-        } = DEFAULT_FALLBACK_CONFIG // or the default fallback value
+      | string = DEFAULT_FALLBACK_CONFIG // or the default fallback value
   ) {
+    debug = makeDebug(config?.debug || false)("xswd");
     debug("creating connection");
     checkAppInfo(appInfo);
     this.appInfo = appInfo;
-    this.config = config;
-    this._connection = new XSWDConnection(appInfo, config);
+    this.config = { ...DEFAULT_CONFIG, ...config };
+    this._xswd_connection = new XSWDConnection(appInfo, config);
+    this._connection = this._xswd_connection;
 
     if (fallback_http_rpc) {
       this.fallback_http_rpc = fallback_http_rpc;
+      this._fallback_connection = new FallbackConnection(fallback_http_rpc, {
+        debug: config?.debug || false,
+      });
+      this._connection = this._fallback_connection;
+      this.status = { initialized: true, fallback: true };
     }
   }
 
   async initialize() {
-    let initialisation = false;
-    this._connection = new XSWDConnection(this.appInfo, this.config);
+    this._xswd_connection = new XSWDConnection(this.appInfo, this.config);
 
-    try {
-      initialisation = await this._connection.initialize();
-      debug({ initialisation });
-      this.initialized = initialisation;
-    } catch (error) {
-      debug({ error });
-    } finally {
-      if (!initialisation && this.fallback_http_rpc) {
-        debug("falling back to public server", this.fallback_http_rpc);
-        this._connection = new FallbackConnection(this.fallback_http_rpc);
-      }
-    }
-    return initialisation;
+    await this._xswd_connection.initialize();
+    this.status = { initialized: true, fallback: false };
+    this._connection = this._xswd_connection;
   }
 
   async close() {
-    if (this.initialized) {
+    if (this.status.initialized) {
       this._connection.close();
     }
   }
@@ -104,7 +101,7 @@ export class Api {
     { event, callback }: { event: EventType; callback?: any },
     subscriptionType: "auto" | "permanent" = "permanent"
   ) {
-    if (this.initialized && this._connection instanceof XSWDConnection) {
+    if (this.status.initialized && this._connection instanceof XSWDConnection) {
       const subscription = await this._connection.sendSync(
         "wallet",
         "Subscribe",
@@ -140,7 +137,7 @@ export class Api {
       ? Entry
       : unknown
   >(event: ET, predicate?: (eventValue: EV) => boolean): Promise<EV> {
-    if (this.initialized) {
+    if (this.status.initialized) {
       return await this._connection._checkEvent(event, predicate);
     }
     if (this._connection instanceof XSWDConnection) {
