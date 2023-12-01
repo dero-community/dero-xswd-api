@@ -146,7 +146,6 @@ class XSWDConnection extends Connection {
           }
         } else if ("error" in data) {
           const errorData: Response<Entity, Method<Entity>, "error"> = data;
-          console.error(errorData.error.message);
           reject(errorData.error.message);
           this.handle(data);
         } else if ("result" in data) {
@@ -164,7 +163,6 @@ class XSWDConnection extends Connection {
 
       this.websocket.onerror = (error) => {
         this.state = ConnectionState.Closed;
-        console.error(error);
         reject(error);
       };
 
@@ -212,7 +210,7 @@ class XSWDConnection extends Connection {
     method: Method<typeof entity>,
     body: Omit<JSONRPCRequestBody<typeof entity, typeof method>, "id">
   ): number {
-    console.log("\n\n----------- REQUEST -------", entity, method, "\n");
+    debug("\n\n----------- REQUEST -------", entity, method, "\n");
     if (this.state == ConnectionState.Accepted) {
       const id = this.id;
       this.id += 1;
@@ -241,8 +239,8 @@ class XSWDConnection extends Connection {
     await this._checkResponse(id);
     const data = this.responses[id];
 
-    console.log("Response:");
-    console.log(data);
+    debug("Response:");
+    debug(data);
 
     delete this.responses[id];
 
