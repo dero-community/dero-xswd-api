@@ -50,6 +50,7 @@ export type Method<E extends Entity> = E extends "daemon"
       | "GetHeight"
       | "GetTransferbyTXID"
       | "GetTransfers"
+      | "GetTrackedAssets"
       | "MakeIntegratedAddress"
       | "SplitIntegratedAddress"
       | "QueryKey"
@@ -102,6 +103,8 @@ export type Params<
   ? GetBalance
   : M extends "GetHeight"
   ? undefined
+  : M extends "GetTrackedAssets"
+  ? GetTrackedAssets
   : M extends "GetTransferbyTXID"
   ? GetTransferbyTXID
   : M extends "GetTransfers"
@@ -248,6 +251,11 @@ export type DERONameToAddress = {
 
 export type GetBalance = {
   scid?: Hash;
+};
+
+export type GetTrackedAssets = {
+  only_positive_balances: boolean;
+  skip_balance_check: boolean;
 };
 
 export type GetTransferbyTXID = {

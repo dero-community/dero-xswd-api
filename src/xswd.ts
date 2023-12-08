@@ -19,6 +19,7 @@ import {
   DERONameToAddress,
   Transfer,
   GetBalance,
+  GetTrackedAssets,
 } from "./types/request";
 import { AppInfo, EventType } from "./types/types";
 import makeDebug from "./debug";
@@ -195,6 +196,19 @@ export class Api {
         params,
       });
     },
+
+    async GetTrackedAssets(params: GetTrackedAssets) {
+      return await this._api._connection.sendSync(
+        "wallet",
+        "GetTrackedAssets",
+        {
+          jsonrpc: "2.0",
+          method: "GetTrackedAssets",
+          params,
+        }
+      );
+    },
+
     async MakeIntegratedAddress(params: MakeIntegratedAddress) {
       return await this._api._connection.sendSync(
         "wallet",

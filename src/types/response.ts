@@ -47,6 +47,8 @@ export type ResultResponse<E extends Entity, M extends Method<E>> = M extends
   ? { height: Uint64 }
   : M extends "GetTransfers"
   ? GetTransfersResult
+  : M extends "GetTrackedAssets"
+  ? GetTrackedAssetsResult
   : M extends "QueryKey"
   ? { key: string }
   : M extends "Subscribe"
@@ -225,6 +227,10 @@ export type Balance = Uint64;
 
 type GetTransfersResult = {
   entries: Entry[];
+};
+
+type GetTrackedAssetsResult = {
+  balances: { [asset: Hash]: Uint64 };
 };
 
 type GetTransferByTXIDResult = {

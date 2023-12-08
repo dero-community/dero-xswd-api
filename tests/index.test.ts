@@ -375,33 +375,58 @@ describe("commands", () => {
       TIMEOUT
     );
 
-    test("transfer", async () => {
-      const response = await xswd.wallet.transfer({
-        transfers: [
-          {
-            scid: DERO,
-            amount: 1000,
-            destination: address2,
-          },
-        ],
-      });
+    test(
+      "transfer",
+      async () => {
+        const response = await xswd.wallet.transfer({
+          transfers: [
+            {
+              scid: DERO,
+              amount: 1000,
+              destination: address2,
+            },
+          ],
+        });
 
-      const [error /*resultResponse*/] = to<"wallet", "transfer">(response);
-      expect(error).toBeUndefined();
-      // expect(resultResponse) // TODO
-    });
+        const [error /*resultResponse*/] = to<"wallet", "transfer">(response);
+        expect(error).toBeUndefined();
+        // expect(resultResponse) // TODO
+      },
+      TIMEOUT
+    );
 
-    test("transfer2", async () => {
-      const response = await xswd.wallet.transfer({
-        transfers: [],
-        sc_rpc: scinvokeSCArgs("Initialize", []),
-        ringsize: 32,
-      });
+    test(
+      "transfer2",
+      async () => {
+        const response = await xswd.wallet.transfer({
+          transfers: [],
+          sc_rpc: scinvokeSCArgs("Initialize", []),
+          ringsize: 32,
+        });
 
-      const [error /*resultResponse*/] = to<"wallet", "transfer">(response);
-      expect(error).toBeUndefined();
-      // expect(resultResponse) // TODO
-    });
+        const [error /*resultResponse*/] = to<"wallet", "transfer">(response);
+        expect(error).toBeUndefined();
+        // expect(resultResponse) // TODO
+      },
+      TIMEOUT
+    );
+
+    test(
+      "getTrackedAssets",
+      async () => {
+        const response = await xswd.wallet.GetTrackedAssets({
+          skip_balance_check: false,
+          only_positive_balances: false,
+        });
+        const [error, resultResponse] = to<"wallet", "GetTrackedAssets">(
+          response
+        );
+        console.warn("GetTrackedAssets", { resultResponse });
+
+        expect(error).toBeUndefined();
+      },
+      TIMEOUT
+    );
   });
 });
 describe("events", () => {
