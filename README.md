@@ -1,4 +1,4 @@
-# XSWD Web API
+# DERO XSWD Web API
 Disclaimer: Be aware that this API is still under development and might change.
 ## Getting started
 
@@ -6,18 +6,18 @@ Disclaimer: Be aware that this API is still under development and might change.
 
 ```sh
 # Using npm
-npm install xswd-api
+npm install dero-xswd-api
 ```
 ```sh
 # Using yarn
-yarn add xswd-api
+yarn add dero-xswd-api
 ```
 
 ### Usage
 #### Initialisation
 ##### Typescript
 ```ts
-import { Api, AppInfo, generateAppId } from "xswd-api";
+import { Api, AppInfo, generateAppId } from "dero-xswd-api";
 
 // Define a name
 const name = "My application";
@@ -39,7 +39,7 @@ await xswd.initialize();
 ##### Javascript
 ```js
 /* Javascript */
-import { Api, generateAppId } from "xswd-api";
+import { Api, generateAppId } from "dero-xswd-api";
 
 const name = "My application";
 
@@ -65,7 +65,7 @@ For wallet calls use: `xswd.wallet.<command>`
 
 ##### Example (Typescript)
 ```ts
-import { to, Result } from "xswd-api";
+import { to, Result } from "dero-xswd-api";
 
 // call GetHeight method
 const response = await xswd.node.GetHeight()
@@ -93,7 +93,7 @@ check [tests](tests/index.test.ts) file for more examples.
 ##### Subscribe to an event (Typescript)
 
 ```ts
-import { EventType } from "xswd-api";
+import { EventType } from "dero-xswd-api";
 
 // let the api subscribe to the event 
 // "new_topoheight" | "new_balance" | "new_entry"
@@ -124,4 +124,5 @@ await xswd.subscribe({
 
 - [x] base protocol
 - [x] fallback to public daemon if connection failed (by default, can be disabled)
+- [x] implement GetTrackedAssets
 - [ ] implement new node GetSC methods

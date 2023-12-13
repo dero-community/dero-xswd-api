@@ -240,7 +240,20 @@ class XSWDConnection extends Connection {
     const data = this.responses[id];
 
     debug("Response:");
-    debug(data);
+    if ("result" in data) {
+      if ("stringkeys" in data.result) {
+        if ("C" in data.result.stringkeys) {
+          debug({
+            ...data,
+            result: {
+              ...data.result,
+              stringkeys: { ...data.result.stringkeys, C: "..." },
+            },
+          });
+          delete data.result.stringkeys.C;
+        }
+      }
+    }
 
     delete this.responses[id];
 
