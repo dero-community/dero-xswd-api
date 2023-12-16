@@ -250,7 +250,7 @@ class XSWDConnection extends Connection {
               stringkeys: { ...data.result.stringkeys, C: "..." },
             },
           });
-          delete data.result.stringkeys.C;
+          //delete data.result.stringkeys.C;
         }
       }
     }
