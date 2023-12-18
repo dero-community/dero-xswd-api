@@ -4,6 +4,7 @@ import { AppInfo, Entity, EventType } from "./types/types";
 
 import makeDebug from "./debug";
 import { sleep } from "./utils";
+import { Config } from "./xswd";
 let debug = makeDebug(false)("connection");
 
 export enum ConnectionState {
@@ -14,14 +15,12 @@ export enum ConnectionState {
   Closed = "closed",
 }
 
-// TODO programmable timeouts
-const AUTH_TIMEOUT = 40000;
-const METHOD_TIMEOUT = 20000;
-const BLOCK_TIMEOUT = 30000;
-const INTERVAL = 100;
-
 abstract class Connection {
   id = 1;
+  AUTH_TIMEOUT: number | null = null;
+  METHOD_TIMEOUT: number | null = null;
+  BLOCK_TIMEOUT: number | null = null;
+  INTERVAL = 100;
   constructor() {}
   abstract initialize(): Promise<void>;
   abstract close(): void;
@@ -73,16 +72,17 @@ class XSWDConnection extends Connection {
   buffer: string = "";
   timeouts: Set<any> = new Set();
 
-  constructor(
-    appInfo: AppInfo,
-    config?: { ip?: string; port?: number; debug?: boolean }
-  ) {
+  constructor(appInfo: AppInfo, config?: Config) {
     super();
     debug = makeDebug(config?.debug || false)("connection");
     this.appInfo = appInfo;
 
     this.ip = config?.ip || "localhost";
     this.port = config?.port || 44326;
+
+    this.AUTH_TIMEOUT = config?.timeout?.AUTH_TIMEOUT || null;
+    this.BLOCK_TIMEOUT = config?.timeout?.BLOCK_TIMEOUT || null;
+    this.METHOD_TIMEOUT = config?.timeout?.METHOD_TIMEOUT || null;
   }
   async close() {
     console.warn("closing websocket", this.timeouts);
@@ -170,7 +170,9 @@ class XSWDConnection extends Connection {
         debug("websocket connection opened, authorizing...");
         this.authorize(this.appInfo);
         this.state = ConnectionState.WaitingAuth;
-        setTimeout(() => reject("authorisation timeout"), AUTH_TIMEOUT);
+        if (this.AUTH_TIMEOUT) {
+          setTimeout(() => reject("authorisation timeout"), this.AUTH_TIMEOUT);
+        }
       };
 
       this.websocket.onclose = () => {
@@ -240,7 +242,8 @@ class XSWDConnection extends Connection {
     const data = this.responses[id];
 
     debug("Response:");
-    if ("result" in data) {
+    debug(data);
+    /*if ("result" in data) {
       if ("stringkeys" in data.result) {
         if ("C" in data.result.stringkeys) {
           debug({
@@ -253,7 +256,7 @@ class XSWDConnection extends Connection {
           //delete data.result.stringkeys.C;
         }
       }
-    }
+    }*/
 
     delete this.responses[id];
 
@@ -263,25 +266,29 @@ class XSWDConnection extends Connection {
   private _checkResponse(id: number) {
     return new Promise<void>(async (resolve, reject) => {
       // setup a timeout for response checking
-      const timeout = setTimeout(() => {
-        // delete the timeout record
-        this.timeouts.delete(timeout);
-        reject("request timeout");
-      }, METHOD_TIMEOUT);
+      let timeout: any;
+      if (this.METHOD_TIMEOUT) {
+        timeout = setTimeout(() => {
+          // delete the timeout record
+          this.timeouts.delete(timeout);
+          reject("request timeout");
+        }, this.METHOD_TIMEOUT);
 
-      // record this timeout (if we close we need to clear the handles)
-      this.timeouts.add(timeout);
-
+        // record this timeout (if we close we need to clear the handles)
+        this.timeouts.add(timeout);
+      }
       // loop over time to see if the event has been received
       for (let attempts = 1; ; attempts++) {
-        await sleep(INTERVAL * attempts); // double the time at each new attempts
+        await sleep(this.INTERVAL * attempts); // double the time at each new attempts
         debug("checking response", id);
 
         // if event hasn't already been processed
         if (this.responses[id] !== null && this.responses[id] !== undefined) {
           // handle
           debug(`response ${id}`, this.responses[id]);
-          this.timeouts.delete(timeout);
+          if (timeout !== undefined) {
+            this.timeouts.delete(timeout);
+          }
           resolve();
           break;
         }
@@ -295,19 +302,21 @@ class XSWDConnection extends Connection {
     predicate?: (eventValue: any) => boolean
   ): Promise<any> {
     return new Promise<any>(async (resolve, reject) => {
-      // setup a timeout for event checking
-      const timeout = setTimeout(() => {
-        // delete the timeout record
-        this.timeouts.delete(timeout);
-        reject("event check timeout");
-      }, BLOCK_TIMEOUT);
+      let timeout: any;
+      if (this.BLOCK_TIMEOUT) {
+        // setup a timeout for event checking
+        timeout = setTimeout(() => {
+          // delete the timeout record
+          this.timeouts.delete(timeout);
+          reject("event check timeout");
+        }, this.BLOCK_TIMEOUT);
 
-      // record this timeout (if we close we need to clear the handles)
-      this.timeouts.add(timeout);
-
+        // record this timeout (if we close we need to clear the handles)
+        this.timeouts.add(timeout);
+      }
       // loop over time to see if the event has been received
       for (let attempts = 1; ; attempts++) {
-        await sleep(INTERVAL * attempts); // double the time at each new attempts
+        await sleep(this.INTERVAL * attempts); // double the time at each new attempts
         debug("checking event", eventType);
 
         // if there is no predicate or this is the target
@@ -317,7 +326,9 @@ class XSWDConnection extends Connection {
             // handle
             this.events[eventType].processed = true;
             debug("checked event", eventType);
-            this.timeouts.delete(timeout);
+            if (timeout !== undefined) {
+              this.timeouts.delete(timeout);
+            }
             resolve(this.events[eventType].value);
             break;
           }

@@ -29,6 +29,22 @@ let debug = makeDebug(false)("xswd");
 
 const DEFAULT_FALLBACK_CONFIG = "dero-api.mysrv.cloud:443";
 const DEFAULT_CONFIG = { ip: "localhost", port: 44326 };
+const DEFAULT_TIMEOUT = {
+  AUTH_TIMEOUT: 40000,
+  METHOD_TIMEOUT: 20000,
+  BLOCK_TIMEOUT: 30000,
+};
+
+export type Config = {
+  ip?: string;
+  port?: number;
+  debug?: boolean;
+  timeout?: {
+    AUTH_TIMEOUT?: number;
+    METHOD_TIMEOUT?: number;
+    BLOCK_TIMEOUT?: number;
+  };
+};
 
 // https://dero-api.mysrv.cloud/json_rpc
 // dero-node-ca.mysrv.cloud:10102
@@ -50,15 +66,11 @@ export class Api {
   _fallback_connection: FallbackConnection | null = null;
   fallback_http_rpc: string | null = null;
   appInfo: AppInfo;
-  config: { ip?: string; port?: number; debug?: boolean };
+  config: Config;
 
   constructor(
     appInfo: AppInfo,
-    config?: {
-      ip?: string;
-      port?: number;
-      debug?: boolean;
-    },
+    config?: Config,
     // if xswd fails to connect, at least connect to a public node
     fallback_http_rpc:
       | false // any falsy means deactivate fallback
@@ -70,7 +82,11 @@ export class Api {
     debug("creating connection");
     checkAppInfo(appInfo);
     this.appInfo = appInfo;
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = {
+      ...DEFAULT_CONFIG,
+      ...(config || {}),
+      timeout: { ...DEFAULT_TIMEOUT, ...(config?.timeout || {}) },
+    };
     this._xswd_connection = new XSWDConnection(appInfo, config);
     this._connection = this._xswd_connection;
 
@@ -82,6 +98,9 @@ export class Api {
       this._connection = this._fallback_connection;
       this.status = { initialized: true, fallback: true };
     }
+    /**
+
+   */
   }
 
   async initialize() {
