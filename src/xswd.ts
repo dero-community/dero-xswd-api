@@ -30,8 +30,8 @@ let debug = makeDebug(false)("xswd");
 const DEFAULT_FALLBACK_CONFIG = "dero-api.mysrv.cloud:443";
 const DEFAULT_CONFIG = { ip: "localhost", port: 44326 };
 const DEFAULT_TIMEOUT = {
-  AUTH_TIMEOUT: 40000,
-  METHOD_TIMEOUT: 20000,
+  AUTH_TIMEOUT: undefined,
+  METHOD_TIMEOUT: undefined,
   BLOCK_TIMEOUT: 30000,
 };
 
