@@ -32,7 +32,7 @@ const DEFAULT_CONFIG = { ip: "localhost", port: 44326 };
 const DEFAULT_TIMEOUT = {
   AUTH_TIMEOUT: undefined,
   METHOD_TIMEOUT: undefined,
-  BLOCK_TIMEOUT: 30000,
+  BLOCK_TIMEOUT: undefined,
 };
 
 export type Config = {
