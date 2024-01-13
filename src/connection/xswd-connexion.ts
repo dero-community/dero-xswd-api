@@ -1,49 +1,13 @@
-import { Method, JSONRPCRequestBody } from "./types/request";
-import { AuthResponse, EventResponse, Response } from "./types/response";
-import { AppInfo, Entity, EventType } from "./types/types";
+import { AppInfo, Config, Entity, EventType } from "../types/types";
+import { Connection, ConnectionState } from "./connection";
+import { sleep } from "../utils";
+import makeDebug from "../debug";
+import { AuthResponse, EventResponse, Response } from "../types/response";
+import { JSONRPCRequestBody, Method } from "../types/request";
 
-import makeDebug from "./debug";
-import { sleep } from "./utils";
-import { Config } from "./xswd";
-let debug = makeDebug(false)("connection");
+let debug = makeDebug(false)("xswd-connection");
 
-export enum ConnectionState {
-  Initializing = "initializing",
-  WaitingAuth = "waitingAuth",
-  Accepted = "accepted",
-  Refused = "refused",
-  Closed = "closed",
-}
-
-abstract class Connection {
-  id = 1;
-  AUTH_TIMEOUT: number | null = null;
-  METHOD_TIMEOUT: number | null = null;
-  BLOCK_TIMEOUT: number | null = null;
-  INTERVAL = 100;
-  constructor() {}
-  abstract initialize(): Promise<void>;
-  abstract close(): void;
-  abstract onclose(): void;
-
-  abstract sendSync<E extends Entity, M extends Method<E>>(
-    entity: E,
-    method: M,
-    body: Omit<JSONRPCRequestBody<typeof entity, typeof method>, "id">
-  ): Promise<Response<E, M, "error"> | Response<E, M, "result">>;
-
-  abstract _checkEvent(
-    eventType: EventType,
-    predicate?: (eventValue: any) => boolean
-  ): Promise<any>;
-}
-
-class XSWDConnection extends Connection {
-  websocket: WebSocket | undefined;
-  ip: string;
-  port: number;
-  state = ConnectionState.Initializing;
-  responses: { [id: number]: null | any } = {};
+export class XSWDConnection extends Connection {
   events: {
     [eventType: EventType | string]: {
       processed: boolean;
@@ -70,15 +34,13 @@ class XSWDConnection extends Connection {
   };
   appInfo: AppInfo;
   buffer: string = "";
-  timeouts: Set<any> = new Set();
 
   constructor(appInfo: AppInfo, config?: Config) {
     super();
-    debug = makeDebug(config?.debug || false)("connection");
+    debug = makeDebug(config?.debug || false)("xswd-connection");
     this.appInfo = appInfo;
 
-    this.ip = config?.ip || "localhost";
-    this.port = config?.port || 44326;
+    this.config = config || { ip: "localhost", port: 44326 };
 
     this.AUTH_TIMEOUT = config?.timeout?.AUTH_TIMEOUT || null;
     this.BLOCK_TIMEOUT = config?.timeout?.BLOCK_TIMEOUT || null;
@@ -104,7 +66,7 @@ class XSWDConnection extends Connection {
       }
       this.state = ConnectionState.Initializing;
 
-      const url = `ws://${this.ip}:${this.port}/xswd`;
+      const url = `ws://${this.config.ip}:${this.config.port}/xswd`;
       this.websocket = new WebSocket(url);
       debug("websocket created for " + url);
 
@@ -192,9 +154,6 @@ class XSWDConnection extends Connection {
     debug("sending authorisation: ", { data });
     this.websocket?.send(JSON.stringify(data));
   }
-  private handle(data: any) {
-    this.responses[Number(data.id)] = data;
-  }
 
   private handleEvent(data: EventResponse) {
     this.events[data.result.event].value = data.result.value;
@@ -207,28 +166,6 @@ class XSWDConnection extends Connection {
     }
   }
 
-  private send(
-    entity: Entity,
-    method: Method<typeof entity>,
-    body: Omit<JSONRPCRequestBody<typeof entity, typeof method>, "id">
-  ): number {
-    debug("\n\n----------- REQUEST -------", entity, method, "\n");
-    if (this.state == ConnectionState.Accepted) {
-      const id = this.id;
-      this.id += 1;
-      const bodyWithId: JSONRPCRequestBody<typeof entity, typeof method> = {
-        ...body,
-        id,
-      };
-
-      this.websocket?.send(JSON.stringify(bodyWithId));
-      this.responses[id] = null;
-      return id;
-    } else {
-      throw "sending without being connected";
-    }
-  }
-
   async sendSync<E extends Entity, M extends Method<E>>(
     entity: E,
     method: M,
@@ -236,7 +173,7 @@ class XSWDConnection extends Connection {
   ): Promise<Response<E, M, "error"> | Response<E, M, "result">> {
     debug("sendSync:", { body });
 
-    const id = this.send(entity, method, body);
+    const id = this._send(entity, method, body);
 
     await this._checkResponse(id);
     const data = this.responses[id];
@@ -261,39 +198,6 @@ class XSWDConnection extends Connection {
     delete this.responses[id];
 
     return data;
-  }
-
-  private _checkResponse(id: number) {
-    return new Promise<void>(async (resolve, reject) => {
-      // setup a timeout for response checking
-      let timeout: any;
-      if (this.METHOD_TIMEOUT) {
-        timeout = setTimeout(() => {
-          // delete the timeout record
-          this.timeouts.delete(timeout);
-          reject("request timeout");
-        }, this.METHOD_TIMEOUT);
-
-        // record this timeout (if we close we need to clear the handles)
-        this.timeouts.add(timeout);
-      }
-      // loop over time to see if the event has been received
-      for (let attempts = 1; ; attempts++) {
-        await sleep(this.INTERVAL * attempts); // double the time at each new attempts
-        debug("checking response", id);
-
-        // if event hasn't already been processed
-        if (this.responses[id] !== null && this.responses[id] !== undefined) {
-          // handle
-          debug(`response ${id}`, this.responses[id]);
-          if (timeout !== undefined) {
-            this.timeouts.delete(timeout);
-          }
-          resolve();
-          break;
-        }
-      }
-    });
   }
 
   // TODO Typing
@@ -336,66 +240,3 @@ class XSWDConnection extends Connection {
     });
   }
 }
-
-class FallbackConnection extends Connection {
-  url: string;
-  events = {};
-
-  constructor(url: string, config?: { debug?: boolean }) {
-    super();
-    debug = makeDebug(config?.debug || false)("connection");
-    this.url = `${url}/json_rpc`;
-  }
-
-  async sendSync<E extends Entity, M extends Method<E>>(
-    entity: E,
-    method: M,
-    body: Omit<JSONRPCRequestBody<E, M>, "id">
-  ): Promise<Response<E, M, "error"> | Response<E, M, "result">> {
-    const id = this.id++;
-    const bodyWithId: JSONRPCRequestBody<Entity, Method<Entity>> = {
-      ...body,
-      id,
-    };
-
-    debug({ bodyWithId });
-    const response = await fetch(this.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(bodyWithId),
-    });
-
-    const json = await response.json();
-
-    debug({ response: json }); // TODO
-
-    return json;
-  }
-
-  //
-  // Inactive methods
-  //
-
-  initialize(): Promise<void> {
-    throw "Connection.initialize() shall not be used in fallback mode";
-  }
-  close(): void {}
-  onclose(): void {}
-  send(
-    entity: Entity,
-    method: Method<Entity>,
-    body: Omit<JSONRPCRequestBody<Entity, Method<Entity>>, "id">
-  ): number {
-    throw "Connection.send() shall not be used in fallback mode";
-  }
-  _checkEvent(
-    eventType: EventType,
-    predicate?: ((eventValue: any) => boolean) | undefined
-  ): Promise<any> {
-    throw "Connection._checkEvent() shall not be used in fallback mode";
-  }
-}
-
-export { XSWDConnection, Connection, FallbackConnection };

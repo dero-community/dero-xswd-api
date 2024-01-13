@@ -1,4 +1,3 @@
-import { Connection, FallbackConnection, XSWDConnection } from "./connection";
 import {
   Echo,
   GetTransferbyTXID,
@@ -21,41 +20,24 @@ import {
   GetBalance,
   GetTrackedAssets,
 } from "./types/request";
-import { AppInfo, EventType } from "./types/types";
+import { AppInfo, Config, EventType } from "./types/types";
 import makeDebug from "./debug";
 import { Entry, Balance, Topoheight } from "./types/response";
+import { Connection } from "./connection/connection";
+import { FallbackConnection } from "./connection/fallback-connection";
+import { XSWDConnection } from "./connection/xswd-connexion";
+import { public_nodes } from "./utils";
 
 let debug = makeDebug(false)("xswd");
 
-const DEFAULT_FALLBACK_CONFIG = "dero-api.mysrv.cloud:443";
+const DEFAULT_FALLBACK_CONFIG = public_nodes.community;
+
 const DEFAULT_CONFIG = { ip: "localhost", port: 44326 };
 const DEFAULT_TIMEOUT = {
   AUTH_TIMEOUT: undefined,
   METHOD_TIMEOUT: undefined,
   BLOCK_TIMEOUT: undefined,
 };
-
-export type Config = {
-  ip?: string;
-  port?: number;
-  debug?: boolean;
-  timeout?: {
-    AUTH_TIMEOUT?: number;
-    METHOD_TIMEOUT?: number;
-    BLOCK_TIMEOUT?: number;
-  };
-};
-
-// https://dero-api.mysrv.cloud/json_rpc
-// dero-node-ca.mysrv.cloud:10102
-// ams.derofoundation.org:11011
-// 213.171.208.37:18089 (MySrvCloud)
-// 5.161.123.196:11011 (MySrvCloud VA)
-// 51.222.86.51:11011 (RabidMining Pool)
-// 74.208.54.173:50404 (deronfts)
-// 85.214.253.170:53387 (mmarcel-vps)
-// 163.172.26.245:10505 (DeroStats)
-// 44.198.24.170:20000 (pieswap)
 
 export class Api {
   _connection: Connection;
@@ -64,19 +46,16 @@ export class Api {
     initialized: false,
   };
   _fallback_connection: FallbackConnection | null = null;
-  fallback_http_rpc: string | null = null;
+
   appInfo: AppInfo;
   config: Config;
+  fallback_config: Config;
 
   constructor(
     appInfo: AppInfo,
     config?: Config,
     // if xswd fails to connect, at least connect to a public node
-    fallback_http_rpc:
-      | false // any falsy means deactivate fallback
-      | null
-      | undefined
-      | string = DEFAULT_FALLBACK_CONFIG // or the default fallback value
+    fallback_config: Config = DEFAULT_FALLBACK_CONFIG // or the default fallback value
   ) {
     debug = makeDebug(config?.debug || false)("xswd");
     debug("creating connection");
@@ -90,30 +69,63 @@ export class Api {
     this._xswd_connection = new XSWDConnection(appInfo, config);
     this._connection = this._xswd_connection;
 
-    if (fallback_http_rpc) {
-      this.fallback_http_rpc = fallback_http_rpc;
-      this._fallback_connection = new FallbackConnection(fallback_http_rpc, {
-        debug: config?.debug || false,
-      });
+    this.fallback_config = fallback_config;
+    if (fallback_config) {
+      this._fallback_connection = new FallbackConnection(fallback_config);
       this._connection = this._fallback_connection;
-      this.status = { initialized: true, fallback: true };
+      this.status = { initialized: false };
     }
-    /**
-
-   */
+    debug("configured fallback:", this.fallback_config);
   }
 
   async initialize() {
-    this._xswd_connection = new XSWDConnection(this.appInfo, this.config);
+    return new Promise<void>(async (resolve, reject) => {
+      debug("initializing");
 
-    await this._xswd_connection.initialize();
-    this.status = { initialized: true, fallback: false };
-    this._connection = this._xswd_connection;
+      if (this._fallback_connection) {
+        debug("initializing fallback");
+        await this._fallback_connection
+          .initialize()
+          .then(() => {
+            console.log("fallback initialized:");
+            this.status = { initialized: true, fallback: true };
+          })
+          .catch((error) => {
+            console.warn("failed to initialize fallback:", error);
+          });
+      }
+
+      this._xswd_connection = new XSWDConnection(this.appInfo, this.config);
+
+      debug("initializing xswd");
+
+      this._xswd_connection
+        .initialize()
+        .then(() => {
+          debug("xswd initialized");
+          this._fallback_connection?.close();
+          this.status = { initialized: true, fallback: false };
+          this._connection = this._xswd_connection;
+          resolve();
+        })
+        .catch((error) => {
+          if (this.status.initialized == true && this.status.fallback) {
+            console.warn("failed to initialize xswd. staying in fallback mode");
+            debug("" + error);
+            resolve();
+          } else {
+            console.error("failed to initialize xswd or fallback:", error);
+            reject(error);
+          }
+        });
+    });
   }
 
   async close() {
     if (this.status.initialized) {
-      this._connection.close();
+      this._fallback_connection?.close();
+      this._xswd_connection.close();
+      //this._connection.close();
     }
   }
 
@@ -122,7 +134,7 @@ export class Api {
     subscriptionType: "auto" | "permanent" = "permanent"
   ) {
     if (this.status.initialized && this._connection instanceof XSWDConnection) {
-      const subscription = await this._connection.sendSync(
+      const subscription = await this._xswd_connection.sendSync(
         "wallet",
         "Subscribe",
         {
@@ -133,10 +145,10 @@ export class Api {
       );
       if ("result" in subscription) {
         if (subscription.result) {
-          this._connection.events[event].subscribed = subscriptionType;
+          this._xswd_connection.events[event].subscribed = subscriptionType;
           // dont overwrite user callback
           if (subscriptionType == "permanent") {
-            this._connection.events[event].callback = callback;
+            this._xswd_connection.events[event].callback = callback;
           }
         }
         return subscription.result;
@@ -157,8 +169,8 @@ export class Api {
       ? Entry
       : unknown
   >(event: ET, predicate?: (eventValue: EV) => boolean): Promise<EV> {
-    if (this.status.initialized) {
-      return await this._connection._checkEvent(event, predicate);
+    if (this.status.initialized && this._connection instanceof XSWDConnection) {
+      return await this._xswd_connection._checkEvent(event, predicate);
     }
     if (this._connection instanceof XSWDConnection) {
       throw "cannot wait for event if connection is not initialized";

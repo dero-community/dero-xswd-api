@@ -16,9 +16,11 @@ const appInfo: AppInfo = {
   description: "A brief testing application",
   url: "http://localhost",
 };
-let xswd = new Api(appInfo);
+let xswd = new Api(appInfo, { debug: true });
 
-beforeAll(async () => {}, TIMEOUT);
+beforeAll(async () => {
+  await xswd.initialize();
+}, TIMEOUT);
 
 describe("public daemon", () => {
   test(
