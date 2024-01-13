@@ -94,7 +94,7 @@ export class FallbackConnection extends Connection {
     body: Omit<JSONRPCRequestBody<E, M>, "id">
   ): Promise<Response<E, M, "error"> | Response<E, M, "result">> {
     if (entity == "wallet") {
-      throw "cannot sent to a wallet in fallback mode";
+      throw "cannot send to a wallet in fallback mode";
     }
 
     debug("sendSync (fallback):", { body });

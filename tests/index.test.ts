@@ -9,6 +9,7 @@ import WebSocket from "ws";
 Object.assign(global, { TextDecoder, TextEncoder, WebSocket });
 
 const TIMEOUT = 40000;
+const DEBUG = true;
 
 const skip = (a: any, b: any) => {};
 
@@ -30,10 +31,10 @@ End Function
 async function installTestSC(): Promise<{ txid: string }> {
   return installSC("http://127.0.0.1:30000/install_sc", TEST_SC);
 }
-//! Need to fill with another valid address to test transfers
-let address2 =
-  "deto1qyre7td6x9r88y4cavdgpv6k7lvx6j39lfsx420hpvh3ydpcrtxrxqg8v8e3z";
-let xswd = new Api(appInfo);
+
+let address2 = "";
+
+let xswd = new Api(appInfo, { ip: "localhost", port: 40000, debug: DEBUG });
 let scid: Hash;
 let address: string;
 
@@ -63,6 +64,18 @@ async function createCaptainName() {
 }
 
 beforeAll(async () => {
+  address2 = await (async () => {
+    let xswd = new Api(appInfo, { ip: "localhost", port: 40001, debug: DEBUG });
+    await xswd.initialize();
+    const [err, addr] = to<"wallet", "GetAddress">(
+      await xswd.wallet.GetAddress()
+    );
+    if (err || addr === undefined) {
+      throw "!could not get second address to transfer";
+    }
+    await xswd.close();
+    return addr.address;
+  })();
   await xswd.initialize();
   console.log({ status: xswd.status });
 

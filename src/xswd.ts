@@ -99,7 +99,7 @@ export class Api {
 
       debug("initializing xswd");
 
-      this._xswd_connection
+      await this._xswd_connection
         .initialize()
         .then(() => {
           debug("xswd initialized");
