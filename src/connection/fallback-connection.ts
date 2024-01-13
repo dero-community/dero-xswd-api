@@ -28,7 +28,7 @@ export class FallbackConnection extends Connection {
       }
       this.state = ConnectionState.Initializing;
 
-      const url = `ws://${this.config.ip}:${this.config.port}/ws`;
+      const url = `wss://${this.config.ip}:${this.config.port}/ws`;
       this.websocket = new WebSocket(url);
       debug("websocket (fallback) created for " + url);
 
