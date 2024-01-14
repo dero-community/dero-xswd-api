@@ -26,11 +26,10 @@ import { Entry, Balance, Topoheight } from "./types/response";
 import { Connection } from "./connection/connection";
 import { FallbackConnection } from "./connection/fallback-connection";
 import { XSWDConnection } from "./connection/xswd-connexion";
-import { public_nodes } from "./utils";
 
 let debug = makeDebug(false)("xswd");
 
-const DEFAULT_FALLBACK_CONFIG = public_nodes.community;
+//const DEFAULT_FALLBACK_CONFIG = public_nodes.community;
 
 const DEFAULT_CONFIG = { ip: "localhost", port: 44326 };
 const DEFAULT_TIMEOUT = {
@@ -49,13 +48,13 @@ export class Api {
 
   appInfo: AppInfo;
   config: Config;
-  fallback_config: Config;
+  fallback_config: Config | null;
 
   constructor(
     appInfo: AppInfo,
     config?: Config,
     // if xswd fails to connect, at least connect to a public node
-    fallback_config: Config = DEFAULT_FALLBACK_CONFIG // or the default fallback value
+    fallback_config: Config | null = null // no fallback setup by default
   ) {
     debug = makeDebug(config?.debug || false)("xswd");
     debug("creating connection");

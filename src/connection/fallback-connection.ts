@@ -14,6 +14,9 @@ export class FallbackConnection extends Connection {
   constructor(config?: Config) {
     super();
     this.config = config || {};
+    if (this.config.secure === undefined) {
+      this.config.secure = true;
+    }
     debug = makeDebug(config?.debug || false)("fallback-connection");
   }
 
@@ -28,7 +31,8 @@ export class FallbackConnection extends Connection {
       }
       this.state = ConnectionState.Initializing;
 
-      const url = `wss://${this.config.ip}:${this.config.port}/ws`;
+      const protocol = this.config.secure ? "wss" : "ws";
+      const url = `${protocol}://${this.config.ip}:${this.config.port}/ws`;
       this.websocket = new WebSocket(url);
       debug("websocket (fallback) created for " + url);
 

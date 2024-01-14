@@ -16,7 +16,11 @@ const appInfo: AppInfo = {
   description: "A brief testing application",
   url: "http://localhost",
 };
-let xswd = new Api(appInfo, { debug: true });
+let xswd = new Api(
+  appInfo,
+  { debug: true },
+  { ip: "localhost", port: 20000, secure: false }
+);
 
 beforeAll(async () => {
   await xswd.initialize();
@@ -34,4 +38,8 @@ describe("public daemon", () => {
     },
     TIMEOUT
   );
+
+  test("close", async () => {
+    await xswd.close();
+  });
 });

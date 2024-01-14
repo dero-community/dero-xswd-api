@@ -18,6 +18,7 @@ export type Config = {
     METHOD_TIMEOUT?: number;
     BLOCK_TIMEOUT?: number;
   };
+  secure?: boolean;
 };
 
 export type AppInfo = {
