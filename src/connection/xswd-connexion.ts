@@ -40,7 +40,12 @@ export class XSWDConnection extends Connection {
     debug = makeDebug(config?.debug || false)("xswd-connection");
     this.appInfo = appInfo;
 
-    this.config = config || { ip: "localhost", port: 44326 };
+    this.config = {
+      ip: "localhost",
+      port: 44326,
+      secure: false,
+      ...(config || {}),
+    };
 
     this.AUTH_TIMEOUT = config?.timeout?.AUTH_TIMEOUT || null;
     this.BLOCK_TIMEOUT = config?.timeout?.BLOCK_TIMEOUT || null;
@@ -66,7 +71,8 @@ export class XSWDConnection extends Connection {
       }
       this.state = ConnectionState.Initializing;
 
-      const url = `ws://${this.config.ip}:${this.config.port}/xswd`;
+      const protocol = this.config.secure ? "wss" : "ws";
+      const url = `${protocol}://${this.config.ip}:${this.config.port}/xswd`;
       this.websocket = new WebSocket(url);
       debug("websocket created for " + url);
 
