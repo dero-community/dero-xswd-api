@@ -662,6 +662,11 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
+"@lesomnus/channel@^0.0.1":
+  version "0.0.1"
+  resolved "https://registry.yarnpkg.com/@lesomnus/channel/-/channel-0.0.1.tgz#291bdc9ebf7477051fae81211bb16182c24b1805"
+  integrity sha512-hsts/J3PXrH5UUObH3VOo8NKCC2m7RFBnmH1CDpfuyAs/36sz8VmeWFQKDaGqz5dsNaGe7JiLgSvFXhShWH0sQ==
+
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
   resolved "https://registry.npmjs.org/@nodelib/fs.scandir/-/fs.scandir-2.1.5.tgz"

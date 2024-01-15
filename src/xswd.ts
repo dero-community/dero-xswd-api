@@ -19,17 +19,31 @@ import {
   Transfer,
   GetBalance,
   GetTrackedAssets,
+  Method,
+  JSONRPCRequestBody,
 } from "./types/request";
-import { AppInfo, Config, EventType } from "./types/types";
+import {
+  AppInfo,
+  Config,
+  ConnectionState,
+  Entity,
+  EventType,
+} from "./types/types";
 import makeDebug from "./debug";
-import { Entry, Balance, Topoheight } from "./types/response";
-import { Connection } from "./connection/connection";
-import { FallbackConnection } from "./connection/fallback-connection";
-import { XSWDConnection } from "./connection/xswd-connexion";
+import {
+  Response,
+  Entry,
+  Balance,
+  Topoheight,
+  Result,
+  AuthResponse,
+  EventResponse,
+} from "./types/response";
+
+import { Chan } from "@lesomnus/channel";
+import { sleep } from "./utils";
 
 let debug = makeDebug(false)("xswd");
-
-//const DEFAULT_FALLBACK_CONFIG = public_nodes.community;
 
 const DEFAULT_CONFIG = { ip: "localhost", port: 44326 };
 const DEFAULT_TIMEOUT = {
@@ -38,17 +52,76 @@ const DEFAULT_TIMEOUT = {
   BLOCK_TIMEOUT: undefined,
 };
 
+function checkConfig(config: Config) {
+  if (!config.address) {
+    throw "missing address in fallback config";
+  }
+}
+
+enum ConnectionType {
+  XSWD = "xswd",
+  Fallback = "fallback",
+}
+
 export class Api {
-  _connection: Connection;
-  _xswd_connection: XSWDConnection;
-  status: { initialized: false } | { initialized: true; fallback: boolean } = {
-    initialized: false,
+  connection: { [ct in ConnectionType]: WebSocket | null } = {
+    xswd: null,
+    fallback: null,
   };
-  _fallback_connection: FallbackConnection | null = null;
+
+  state: { [ct in ConnectionType]: ConnectionState } = {
+    xswd: ConnectionState.Closed,
+    fallback: ConnectionState.Closed,
+  };
+
+  mode: ConnectionType = ConnectionType.XSWD;
+
+  buffer: string = "";
 
   appInfo: AppInfo;
-  config: Config;
-  fallback_config: Config | null;
+  config: {
+    [k in ConnectionType]: k extends ConnectionType.XSWD
+      ? Config
+      : Config | null;
+  };
+
+  response: Chan<Response<Entity, Method<Entity>, Result>> = new Chan(0);
+  subscriptions: {
+    [et in EventType]: {
+      enabled: boolean;
+      event: Chan<EventResponse>;
+      callback?: (eventValue?: any) => void;
+    };
+  } = {
+    new_topoheight: {
+      enabled: false,
+      event: new Chan<EventResponse>(0),
+      callback: undefined,
+    },
+    new_entry: {
+      enabled: false,
+      event: new Chan<EventResponse>(0),
+      callback: undefined,
+    },
+    new_balance: {
+      enabled: false,
+      event: new Chan<EventResponse>(0),
+      callback: undefined,
+    },
+  };
+
+  private nextId: number = 1;
+
+  get status():
+    | { initialized: false }
+    | { initialized: true; fallback: boolean } {
+    return {
+      initialized:
+        this.state.xswd == ConnectionState.Accepted ||
+        this.state.fallback == ConnectionState.Accepted,
+      fallback: this.mode == ConnectionType.Fallback,
+    };
+  }
 
   constructor(
     appInfo: AppInfo,
@@ -58,53 +131,45 @@ export class Api {
   ) {
     debug = makeDebug(config?.debug || false)("xswd");
     debug("creating connection");
+
     checkAppInfo(appInfo);
     this.appInfo = appInfo;
-    this.config = {
-      ...DEFAULT_CONFIG,
-      ...(config || {}),
-      timeout: { ...DEFAULT_TIMEOUT, ...(config?.timeout || {}) },
-    };
-    this._xswd_connection = new XSWDConnection(appInfo, config);
-    this._connection = this._xswd_connection;
-
-    this.fallback_config = fallback_config;
     if (fallback_config) {
-      this._fallback_connection = new FallbackConnection(fallback_config);
-      this._connection = this._fallback_connection;
-      this.status = { initialized: false };
+      checkConfig(fallback_config);
+      debug("configured fallback:", fallback_config);
     }
-    debug("configured fallback:", this.fallback_config);
+
+    this.config = {
+      xswd: {
+        ...DEFAULT_CONFIG,
+        ...(config || {}),
+        timeout: { ...DEFAULT_TIMEOUT, ...(config?.timeout || {}) },
+      },
+      fallback: fallback_config,
+    };
   }
 
   async initialize() {
     return new Promise<void>(async (resolve, reject) => {
-      debug("initializing");
+      debug("initializing api");
 
-      if (this._fallback_connection) {
-        debug("initializing fallback");
-        await this._fallback_connection
-          .initialize()
+      if (this.config.fallback) {
+        await this._initializeWebsocket(ConnectionType.Fallback)
           .then(() => {
-            console.log("fallback initialized:");
-            this.status = { initialized: true, fallback: true };
+            debug("fallback intitialized");
           })
           .catch((error) => {
             console.warn("failed to initialize fallback:", error);
           });
       }
 
-      this._xswd_connection = new XSWDConnection(this.appInfo, this.config);
-
       debug("initializing xswd");
 
-      await this._xswd_connection
-        .initialize()
+      await this._initializeWebsocket(ConnectionType.XSWD)
         .then(() => {
           debug("xswd initialized");
-          this._fallback_connection?.close();
-          this.status = { initialized: true, fallback: false };
-          this._connection = this._xswd_connection;
+          this.connection.fallback?.close();
+          this.mode = ConnectionType.XSWD;
           resolve();
         })
         .catch((error) => {
@@ -120,35 +185,236 @@ export class Api {
     });
   }
 
-  async close() {
-    if (this.status.initialized) {
-      this._fallback_connection?.close();
-      this._xswd_connection.close();
-      //this._connection.close();
+  async _initializeWebsocket(connectionType: ConnectionType) {
+    return new Promise<void>((resolve, reject) => {
+      debug("initialize " + connectionType);
+      const websocket = this.connection[connectionType];
+
+      if (websocket !== null && websocket.readyState == WebSocket.OPEN) {
+        throw "WebSocket is aleady alive";
+      }
+
+      this.state[connectionType] = ConnectionState.Initializing;
+      const config = this.config[connectionType];
+      if (config != null) {
+        const protocol = config.secure ? "wss" : "ws";
+        const port = config.port ? `:${config.port}` : "";
+        const url = `${protocol}://${config.address}${port}/ws`;
+
+        this.connection[connectionType] = new WebSocket(url);
+        debug(connectionType + " websocket created for " + url);
+
+        this._setupHandlers(connectionType, resolve, reject);
+      }
+    });
+  }
+
+  _handleFragmentedData(
+    message: MessageEvent<any>
+  ):
+    | AuthResponse
+    | EventResponse
+    | Response<Entity, Method<Entity>, "error">
+    | Response<Entity, Method<Entity>, "result">
+    | null {
+    debug("WebSocket:onmessage", { message });
+    // fragmented messages handling
+    try {
+      // default parsing a single message
+      return JSON.parse(message.data.toString());
+    } catch (error) {
+      // sometimes the result is split in multiple message so we need to buffer
+      this.buffer = this.buffer + message.data.toString();
+      try {
+        // we keep parsing the buffer after updating it to check if the result is complete
+        const data = JSON.parse(this.buffer);
+        // success => we empty the buffer
+        this.buffer = "";
+        return data;
+      } catch (error) {
+        // not parsable yet, better luck next message
+        return null;
+      }
     }
   }
 
-  async subscribe(
-    { event, callback }: { event: EventType; callback?: any },
-    subscriptionType: "auto" | "permanent" = "permanent"
+  async _setupHandlers(
+    connectionType: ConnectionType,
+    resolve: (value: void | PromiseLike<void>) => void,
+    reject: (reason?: any) => void
   ) {
-    if (this.status.initialized && this._connection instanceof XSWDConnection) {
-      const subscription = await this._xswd_connection.sendSync(
-        "wallet",
-        "Subscribe",
-        {
-          jsonrpc: "2.0",
-          method: "Subscribe",
-          params: { event },
+    const websocket = this.connection[connectionType];
+    if (websocket) {
+      websocket.onmessage = (message) => {
+        let data:
+          | AuthResponse
+          | EventResponse
+          | Response<Entity, Method<Entity>, "error">
+          | Response<Entity, Method<Entity>, "result">
+          | null;
+
+        data = this._handleFragmentedData(message); // some message are not received in a single frame, this function buffers until message is parsable
+        if (data == null) return;
+
+        if (connectionType == ConnectionType.XSWD) {
+          if ("accepted" in data) {
+            if (data.accepted === true) {
+              this.state[ConnectionType.XSWD] = ConnectionState.Accepted;
+              debug("connection accepted");
+              resolve();
+            } else if (data.accepted === false) {
+              this.state[ConnectionType.XSWD] = ConnectionState.Refused;
+              debug("connection refused", data);
+              reject("connection refused: " + data.message);
+            }
+          }
         }
-      );
+
+        if ("error" in data) {
+          const errorData: Response<Entity, Method<Entity>, "error"> = data;
+          reject(errorData.error.message);
+          this.response.send(errorData);
+        } else if ("result" in data) {
+          // event
+          if (
+            connectionType == ConnectionType.XSWD &&
+            typeof data.result == "object" &&
+            data.result != null &&
+            "event" in data.result
+          ) {
+            const eventData = data as EventResponse;
+            const eventType = eventData.result.event;
+            const eventValue = eventData.result.value;
+
+            if (this.subscriptions[eventType].enabled) {
+              const callback = this.subscriptions[eventType].callback;
+              if (callback !== undefined) callback(eventValue);
+              this.subscriptions[eventType].event.send(eventValue);
+              return;
+            }
+          }
+          // normal response
+          this.response.send(data);
+        }
+      };
+
+      websocket.onerror = (error) => {
+        this.state[connectionType] = ConnectionState.Closed;
+        reject(error);
+      };
+
+      websocket.onopen = () => {
+        if (connectionType == ConnectionType.Fallback) {
+          debug("fallback websocket connection opened.");
+          resolve();
+          this.state[connectionType] = ConnectionState.Accepted;
+        } else {
+          debug("xswd websocket connection opened, authorizing...");
+          this.authorize(this.appInfo);
+          this.state.xswd = ConnectionState.WaitingAuth;
+          if (this.config.xswd.timeout?.AUTH_TIMEOUT) {
+            setTimeout(
+              () => reject("authorisation timeout"),
+              this.config.xswd.timeout?.AUTH_TIMEOUT
+            );
+          }
+        }
+      };
+
+      websocket.onclose = () => {
+        this.state[connectionType] = ConnectionState.Initializing;
+        this.connection[connectionType] = null;
+
+        debug(connectionType + " connection closed");
+        reject(connectionType + " connection closed");
+      };
+
+      debug(connectionType + " websocket handlers are set");
+    }
+  }
+
+  async close() {
+    if (this.status.initialized) {
+      this.connection.xswd?.close();
+      this.connection.fallback?.close();
+      this.state = {
+        xswd: ConnectionState.Closed,
+        fallback: ConnectionState.Closed,
+      };
+    }
+  }
+
+  async Send<E extends Entity, M extends Method<E>>( //! previously sendSync
+    entity: E,
+    method: M,
+    body: Omit<JSONRPCRequestBody<E, M>, "id">
+  ) {
+    return new Promise<Response<E, M, "error"> | Response<E, M, "result">>(
+      async (resolve, reject) => {
+        if (this.mode == ConnectionType.Fallback && entity == "wallet") {
+          reject("cannot send to wallet in fallback mode.");
+        }
+
+        debug("\n\n----------- REQUEST -------", entity, method, "\n");
+
+        const websocket = this.connection[this.mode];
+
+        if (this.state[this.mode] == ConnectionState.Accepted && websocket) {
+          // assing id to the body
+          const id = this.nextId;
+          this.nextId += 1;
+          const bodyWithId: JSONRPCRequestBody<typeof entity, typeof method> = {
+            ...body,
+            id,
+          };
+
+          // send data
+          websocket.send(JSON.stringify(bodyWithId));
+
+          // listen for the response
+
+          for (;;) {
+            const response = await this.response.recv();
+            // if ids mismatch
+            if (response.id != String(id)) {
+              // send it back to the channel
+              debug("id mismatch: ", response.id, String(id), ", resetting");
+              this.response.send(response);
+              await sleep(100);
+            } else {
+              resolve(
+                response as Response<E, M, "error"> | Response<E, M, "result">
+              );
+            }
+          }
+        } else {
+          reject("sending without being connected");
+        }
+      }
+    );
+  }
+
+  async subscribe({
+    event,
+    callback,
+  }: {
+    event: EventType;
+    callback?: (value: any) => void;
+  }) {
+    if (
+      this.connection.xswd &&
+      this.status.initialized &&
+      this.mode === ConnectionType.XSWD
+    ) {
+      const subscription = await this.Send("wallet", "Subscribe", {
+        jsonrpc: "2.0",
+        method: "Subscribe",
+        params: { event },
+      });
       if ("result" in subscription) {
         if (subscription.result) {
-          this._xswd_connection.events[event].subscribed = subscriptionType;
-          // dont overwrite user callback
-          if (subscriptionType == "permanent") {
-            this._xswd_connection.events[event].callback = callback;
-          }
+          this.subscriptions[event].enabled = true;
+          this.subscriptions[event].callback = callback;
         }
         return subscription.result;
       }
@@ -168,59 +434,84 @@ export class Api {
       ? Entry
       : unknown
   >(event: ET, predicate?: (eventValue: EV) => boolean): Promise<EV> {
-    if (this.status.initialized && this._connection instanceof XSWDConnection) {
-      return await this._xswd_connection._checkEvent(event, predicate);
+    if (this.mode == ConnectionType.Fallback) {
+      throw "cannot wait for event in fallback mode";
     }
-    if (this._connection instanceof XSWDConnection) {
+
+    if (!this.subscriptions[event].enabled) {
+      throw `event ${event} has not been subscribed to`;
+    }
+
+    if (this.connection.xswd && this.status.initialized) {
+      const eventChannel = this.subscriptions[event].event;
+      for (;;) {
+        const eventResponse = await eventChannel.recv();
+        if (eventResponse.result.event != event) {
+          eventChannel.send(eventResponse);
+          await sleep(100);
+        } else {
+          if (predicate && !predicate(eventResponse.result.value)) {
+            eventChannel.send(eventResponse);
+            await sleep(100);
+          } else {
+            return eventResponse.result.value;
+          }
+        }
+      }
+    } else {
       throw "cannot wait for event if connection is not initialized";
     }
-    throw "cannot wait for event in fallback mode";
+  }
+
+  private authorize(appInfo: AppInfo) {
+    const websocket = this.connection.xswd;
+    if (websocket) {
+      const data = { ...appInfo };
+      debug("sending authorisation: ", { data });
+      websocket.send(JSON.stringify(data));
+    }
   }
 
   wallet = {
     _api: this as Api,
 
     async Echo(params: Echo) {
-      return await this._api._connection.sendSync("wallet", "Echo", {
+      return await this._api.Send("wallet", "Echo", {
         jsonrpc: "2.0",
         method: "Echo",
         params,
       });
     },
     async GetAddress() {
-      return await this._api._connection.sendSync("wallet", "GetAddress", {
+      return await this._api.Send("wallet", "GetAddress", {
         jsonrpc: "2.0",
         method: "GetAddress",
         params: undefined,
       });
     },
     async GetBalance(params: GetBalance = {}) {
-      return await this._api._connection.sendSync("wallet", "GetBalance", {
+      return await this._api.Send("wallet", "GetBalance", {
         jsonrpc: "2.0",
         method: "GetBalance",
         params,
       });
     },
     async GetHeight() {
-      return await this._api._connection.sendSync("wallet", "GetHeight", {
+      return await this._api.Send("wallet", "GetHeight", {
         jsonrpc: "2.0",
         method: "GetHeight",
         params: undefined,
       });
     },
     async GetTransferbyTXID(params: GetTransferbyTXID) {
-      return await this._api._connection.sendSync(
-        "wallet",
-        "GetTransferbyTXID",
-        {
-          jsonrpc: "2.0",
-          method: "GetTransferbyTXID",
-          params,
-        }
-      );
+      return await this._api.Send("wallet", "GetTransferbyTXID", {
+        jsonrpc: "2.0",
+        method: "GetTransferbyTXID",
+        params,
+      });
     },
     async GetTransfers(params: GetTransfers = {}) {
-      return await this._api._connection.sendSync("wallet", "GetTransfers", {
+      return await this._api.Send("wallet", "GetTransfers", {
         jsonrpc: "2.0",
         method: "GetTransfers",
         params,
@@ -228,68 +519,48 @@ export class Api {
     },
 
     async GetTrackedAssets(params: GetTrackedAssets) {
-      return await this._api._connection.sendSync(
-        "wallet",
-        "GetTrackedAssets",
-        {
-          jsonrpc: "2.0",
-          method: "GetTrackedAssets",
-          params,
-        }
-      );
+      return await this._api.Send("wallet", "GetTrackedAssets", {
+        jsonrpc: "2.0",
+        method: "GetTrackedAssets",
+        params,
+      });
     },
 
     async MakeIntegratedAddress(params: MakeIntegratedAddress) {
-      return await this._api._connection.sendSync(
-        "wallet",
-        "MakeIntegratedAddress",
-        {
-          jsonrpc: "2.0",
-          method: "MakeIntegratedAddress",
-          params,
-        }
-      );
+      return await this._api.Send("wallet", "MakeIntegratedAddress", {
+        jsonrpc: "2.0",
+        method: "MakeIntegratedAddress",
+        params,
+      });
     },
     async SplitIntegratedAddress(params: SplitIntegratedAddress) {
-      return await this._api._connection.sendSync(
-        "wallet",
-        "SplitIntegratedAddress",
-        {
-          jsonrpc: "2.0",
-          method: "SplitIntegratedAddress",
-          params,
-        }
-      );
+      return await this._api.Send("wallet", "SplitIntegratedAddress", {
+        jsonrpc: "2.0",
+        method: "SplitIntegratedAddress",
+        params,
+      });
     },
     async QueryKey(params: QueryKey) {
-      return await this._api._connection.sendSync("wallet", "QueryKey", {
+      return await this._api.Send("wallet", "QueryKey", {
         jsonrpc: "2.0",
         method: "QueryKey",
         params,
       });
     },
     async transfer(params: Transfer) {
-      const response = await this._api._connection.sendSync(
-        "wallet",
-        "transfer",
-        {
-          jsonrpc: "2.0",
-          method: "transfer",
-          params,
-        }
-      );
+      const response = await this._api.Send("wallet", "transfer", {
+        jsonrpc: "2.0",
+        method: "transfer",
+        params,
+      });
       return response;
     },
     async scinvoke(params: SCInvoke) {
-      const response = await this._api._connection.sendSync(
-        "wallet",
-        "scinvoke",
-        {
-          jsonrpc: "2.0",
-          method: "scinvoke",
-          params,
-        }
-      );
+      const response = await this._api.Send("wallet", "scinvoke", {
+        jsonrpc: "2.0",
+        method: "scinvoke",
+        params,
+      });
 
       if ("error" in response) {
         throw "could not scinvoke: " + response.error.message;
@@ -302,86 +573,70 @@ export class Api {
     _api: this as Api,
 
     async Echo(params: Echo) {
-      return await this._api._connection.sendSync("daemon", "DERO.Echo", {
+      return await this._api.Send("daemon", "DERO.Echo", {
         jsonrpc: "2.0",
         method: "DERO.Echo",
         params,
       });
     },
     async Ping() {
-      return await this._api._connection.sendSync("daemon", "DERO.Ping", {
+      return await this._api.Send("daemon", "DERO.Ping", {
         jsonrpc: "2.0",
         method: "DERO.Ping",
         params: undefined,
       });
     },
     async GetInfo() {
-      return await this._api._connection.sendSync("daemon", "DERO.GetInfo", {
+      return await this._api.Send("daemon", "DERO.GetInfo", {
         jsonrpc: "2.0",
         method: "DERO.GetInfo",
         params: undefined,
       });
     },
     async GetBlock(params: DEROGetBlock) {
-      return await this._api._connection.sendSync("daemon", "DERO.GetBlock", {
+      return await this._api.Send("daemon", "DERO.GetBlock", {
         jsonrpc: "2.0",
         method: "DERO.GetBlock",
         params,
       });
     },
     async GetBlockHeaderByTopoHeight(params: DEROGetBlockHeaderByTopoHeight) {
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.GetBlockHeaderByTopoHeight",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.GetBlockHeaderByTopoHeight",
-          params,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.GetBlockHeaderByTopoHeight", {
+        jsonrpc: "2.0",
+        method: "DERO.GetBlockHeaderByTopoHeight",
+        params,
+      });
     },
     async GetBlockHeaderByHash(params: DEROGetBlockHeaderByHash) {
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.GetBlockHeaderByHash",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.GetBlockHeaderByHash",
-          params,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.GetBlockHeaderByHash", {
+        jsonrpc: "2.0",
+        method: "DERO.GetBlockHeaderByHash",
+        params,
+      });
     },
     async GetTxPool() {
-      return await this._api._connection.sendSync("daemon", "DERO.GetTxPool", {
+      return await this._api.Send("daemon", "DERO.GetTxPool", {
         jsonrpc: "2.0",
         method: "DERO.GetTxPool",
         params: undefined,
       });
     },
     async GetRandomAddress(params: DEROGetRandomAddress = {}) {
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.GetRandomAddress",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.GetRandomAddress",
-          params,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.GetRandomAddress", {
+        jsonrpc: "2.0",
+        method: "DERO.GetRandomAddress",
+        params,
+      });
     },
     async GetTransaction(params: DEROGetTransaction) {
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.GetTransaction",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.GetTransaction",
-          params,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.GetTransaction", {
+        jsonrpc: "2.0",
+        method: "DERO.GetTransaction",
+        params,
+      });
     },
     /*async SendRawTransaction(params: DEROSendRawTransaction) {
-      return await this._api._connection.sendSync(
+      return await this._api.sendSync(
         "daemon",
         "DERO.SendRawTransaction",
         {
@@ -392,63 +647,47 @@ export class Api {
       );
     },*/
     async GetHeight() {
-      return await this._api._connection.sendSync("daemon", "DERO.GetHeight", {
+      return await this._api.Send("daemon", "DERO.GetHeight", {
         jsonrpc: "2.0",
         method: "DERO.GetHeight",
         params: undefined,
       });
     },
     async GetBlockCount() {
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.GetBlockCount",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.GetBlockCount",
-          params: undefined,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.GetBlockCount", {
+        jsonrpc: "2.0",
+        method: "DERO.GetBlockCount",
+        params: undefined,
+      });
     },
     async GetLastBlockHeader() {
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.GetLastBlockHeader",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.GetLastBlockHeader",
-          params: undefined,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.GetLastBlockHeader", {
+        jsonrpc: "2.0",
+        method: "DERO.GetLastBlockHeader",
+        params: undefined,
+      });
     },
     async GetBlockTemplate(params: DEROGetBlockTemplate) {
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.GetBlockTemplate",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.GetBlockTemplate",
-          params,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.GetBlockTemplate", {
+        jsonrpc: "2.0",
+        method: "DERO.GetBlockTemplate",
+        params,
+      });
     },
     async GetEncryptedBalance(params: DEROGetEncryptedBalance) {
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.GetEncryptedBalance",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.GetEncryptedBalance",
-          params,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.GetEncryptedBalance", {
+        jsonrpc: "2.0",
+        method: "DERO.GetEncryptedBalance",
+        params,
+      });
     },
     async GetSC(params: DEROGetSC, waitAfterNewBlock?: true) {
       if (waitAfterNewBlock) {
         debug("waiting for new block");
-        this._api.subscribe({ event: "new_topoheight" }, "auto");
+        this._api.subscribe({ event: "new_topoheight" });
         await this._api.waitFor("new_topoheight");
       }
-      return await this._api._connection.sendSync("daemon", "DERO.GetSC", {
+      return await this._api.Send("daemon", "DERO.GetSC", {
         jsonrpc: "2.0",
         method: "DERO.GetSC",
         params,
@@ -456,26 +695,18 @@ export class Api {
     },
     async GetGasEstimate(params: DEROGetGasEstimate) {
       // use gasEstimateSCArgs() to simplify usage
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.GetGasEstimate",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.GetGasEstimate",
-          params,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.GetGasEstimate", {
+        jsonrpc: "2.0",
+        method: "DERO.GetGasEstimate",
+        params,
+      });
     },
     async NameToAddress(params: DERONameToAddress) {
-      return await this._api._connection.sendSync(
-        "daemon",
-        "DERO.NameToAddress",
-        {
-          jsonrpc: "2.0",
-          method: "DERO.NameToAddress",
-          params,
-        }
-      );
+      return await this._api.Send("daemon", "DERO.NameToAddress", {
+        jsonrpc: "2.0",
+        method: "DERO.NameToAddress",
+        params,
+      });
     },
   };
 }

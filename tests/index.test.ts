@@ -34,7 +34,11 @@ async function installTestSC(): Promise<{ txid: string }> {
 
 let address2 = "";
 
-let xswd = new Api(appInfo, { ip: "localhost", port: 40000, debug: DEBUG });
+let xswd = new Api(appInfo, {
+  address: "localhost",
+  port: 40000,
+  debug: DEBUG,
+});
 let scid: Hash;
 let address: string;
 
@@ -65,7 +69,11 @@ async function createCaptainName() {
 
 beforeAll(async () => {
   address2 = await (async () => {
-    let xswd = new Api(appInfo, { ip: "localhost", port: 40001, debug: DEBUG });
+    let xswd = new Api(appInfo, {
+      address: "localhost",
+      port: 40001,
+      debug: DEBUG,
+    });
     await xswd.initialize();
     const [err, addr] = to<"wallet", "GetAddress">(
       await xswd.wallet.GetAddress()

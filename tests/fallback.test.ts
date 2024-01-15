@@ -19,7 +19,7 @@ const appInfo: AppInfo = {
 let xswd = new Api(
   appInfo,
   { debug: true },
-  { ip: "localhost", port: 20000, secure: false }
+  { address: "localhost", port: 20000, secure: false }
 );
 
 beforeAll(async () => {

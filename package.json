@@ -42,6 +42,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
+    "@lesomnus/channel": "^0.0.1",
     "@types/node": "^20.9.0"
   }
 }
