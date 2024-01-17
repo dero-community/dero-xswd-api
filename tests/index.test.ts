@@ -310,35 +310,39 @@ describe("commands", () => {
       expect(error).toBeUndefined();
       expect(result?.height).toBeGreaterThanOrEqual(0);
     });
-    test("GetTransferbyTXID", async () => {
-      const transferResponse = await xswd.wallet.transfer({
-        transfers: [
-          {
-            scid: DERO,
-            amount: 10000,
-            destination: address2,
-          },
-        ],
-      });
-      const [transferError, transferResult] = to<"wallet", "transfer">(
-        transferResponse
-      );
-      if (transferError || transferResult === undefined) {
-        throw transferError?.message;
-      }
+    test(
+      "GetTransferbyTXID",
+      async () => {
+        const transferResponse = await xswd.wallet.transfer({
+          transfers: [
+            {
+              scid: DERO,
+              amount: 10000,
+              destination: address2,
+            },
+          ],
+        });
+        const [transferError, transferResult] = to<"wallet", "transfer">(
+          transferResponse
+        );
+        if (transferError || transferResult === undefined) {
+          throw transferError?.message;
+        }
 
-      await xswd.waitFor("new_entry", (v) => v.txid === transferResult.txid);
+        await xswd.waitFor("new_entry", (v) => v.txid === transferResult.txid);
 
-      const response = await xswd.wallet.GetTransferbyTXID({
-        txid: transferResult.txid,
-      });
+        const response = await xswd.wallet.GetTransferbyTXID({
+          txid: transferResult.txid,
+        });
 
-      const [error /*resultResponse*/] = to<"wallet", "GetTransferbyTXID">(
-        response
-      );
-      expect(error).toBeUndefined();
-      //expect(resultResponse?.result.) // TODO
-    });
+        const [error /*resultResponse*/] = to<"wallet", "GetTransferbyTXID">(
+          response
+        );
+        expect(error).toBeUndefined();
+        //expect(resultResponse?.result.) // TODO
+      },
+      TIMEOUT
+    );
     test("GetTransfers", async () => {
       const response = await xswd.wallet.GetTransfers({
         out: true,

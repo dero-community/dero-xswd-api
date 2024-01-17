@@ -51,6 +51,7 @@ const DEFAULT_TIMEOUT = {
   METHOD_TIMEOUT: undefined,
   BLOCK_TIMEOUT: undefined,
 };
+const CHECK_INTERVAL = 300;
 
 function checkConfig(config: Config) {
   if (!config.address) {
@@ -199,7 +200,8 @@ export class Api {
       if (config != null) {
         const protocol = config.secure ? "wss" : "ws";
         const port = config.port ? `:${config.port}` : "";
-        const url = `${protocol}://${config.address}${port}/ws`;
+        const path = connectionType == ConnectionType.XSWD ? "xswd" : "ws";
+        const url = `${protocol}://${config.address}${port}/${path}`;
 
         this.connection[connectionType] = new WebSocket(url);
         debug(connectionType + " websocket created for " + url);
@@ -289,7 +291,7 @@ export class Api {
             if (this.subscriptions[eventType].enabled) {
               const callback = this.subscriptions[eventType].callback;
               if (callback !== undefined) callback(eventValue);
-              this.subscriptions[eventType].event.send(eventValue);
+              this.subscriptions[eventType].event.send(eventData);
               return;
             }
           }
@@ -380,7 +382,7 @@ export class Api {
               // send it back to the channel
               debug("id mismatch: ", response.id, String(id), ", resetting");
               this.response.send(response);
-              await sleep(100);
+              await sleep(CHECK_INTERVAL);
             } else {
               resolve(
                 response as Response<E, M, "error"> | Response<E, M, "result">
@@ -446,13 +448,14 @@ export class Api {
       const eventChannel = this.subscriptions[event].event;
       for (;;) {
         const eventResponse = await eventChannel.recv();
+
         if (eventResponse.result.event != event) {
           eventChannel.send(eventResponse);
-          await sleep(100);
+          await sleep(CHECK_INTERVAL);
         } else {
           if (predicate && !predicate(eventResponse.result.value)) {
             eventChannel.send(eventResponse);
-            await sleep(100);
+            await sleep(CHECK_INTERVAL);
           } else {
             return eventResponse.result.value;
           }
