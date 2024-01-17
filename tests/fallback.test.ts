@@ -18,7 +18,7 @@ const appInfo: AppInfo = {
 };
 let xswd = new Api(
   appInfo,
-  { debug: true },
+  { debug: true, address: "localhost", port: 40000 },
   { address: "localhost", port: 20000, secure: false }
 );
 
