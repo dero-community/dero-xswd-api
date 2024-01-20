@@ -1,5 +1,5 @@
-import { describe, expect, beforeAll, test } from "@jest/globals";
-import { Api, AppInfo, Result, to } from "../src";
+import { describe, expect, beforeAll, test, afterAll } from "@jest/globals";
+import { Api, AppInfo, Result, sleep, to } from "../src";
 
 import WebSocket from "ws";
 import fetch from "node-fetch";
@@ -18,13 +18,17 @@ const appInfo: AppInfo = {
 };
 let xswd = new Api(
   appInfo,
-  { debug: true, address: "localhost", port: 40000 },
+  { debug: false, address: "localhost", port: 40000 },
   { address: "localhost", port: 20000, secure: false }
 );
 
 beforeAll(async () => {
   await xswd.initialize();
 }, TIMEOUT);
+
+afterAll(async () => {
+  await xswd.close();
+});
 
 describe("public daemon", () => {
   test(
@@ -41,5 +45,6 @@ describe("public daemon", () => {
 
   test("close", async () => {
     await xswd.close();
+    await sleep(200);
   });
 });

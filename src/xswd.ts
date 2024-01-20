@@ -51,7 +51,7 @@ const DEFAULT_TIMEOUT = {
   METHOD_TIMEOUT: undefined,
   BLOCK_TIMEOUT: undefined,
 };
-const CHECK_INTERVAL = 300;
+const CHECK_INTERVAL = 500;
 
 function checkConfig(config: Config) {
   if (!config.address) {
@@ -291,7 +291,7 @@ export class Api {
             if (this.subscriptions[eventType].enabled) {
               const callback = this.subscriptions[eventType].callback;
               if (callback !== undefined) callback(eventValue);
-              this.subscriptions[eventType].event.send(eventData);
+              this.subscriptions[eventType].event.send(eventData); // TODO REFACTOR WITH A SINGLE EVENT LOOP
               return;
             }
           }
@@ -384,6 +384,7 @@ export class Api {
               this.response.send(response);
               await sleep(CHECK_INTERVAL);
             } else {
+              debug("id match");
               resolve(
                 response as Response<E, M, "error"> | Response<E, M, "result">
               );
@@ -447,6 +448,9 @@ export class Api {
     if (this.connection.xswd && this.status.initialized) {
       const eventChannel = this.subscriptions[event].event;
       for (;;) {
+        // TODO REFACTOR MOVE THIS EVENT LOOP SOMEWHERE ELSE, Instead simply register for the event, and when an event arrives check for subscribers = callback | waitfor (& predicate)
+        debug("waiting for event", event, ", predicate?", predicate);
+
         const eventResponse = await eventChannel.recv();
 
         if (eventResponse.result.event != event) {

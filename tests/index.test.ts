@@ -1,7 +1,7 @@
-import { describe, expect, beforeAll, test } from "@jest/globals";
+import { describe, expect, beforeAll, test, afterAll } from "@jest/globals";
 import { Api } from "../src/xswd";
 import { AppInfo, Hash } from "../src/types/types";
-import { sleep, to } from "../src/utils";
+import { generateAppId, sleep, to } from "../src/utils";
 import { ADDRESS_LENGTH, DERO, NAME_SERVICE, installSC } from "./utils";
 import { gasEstimateSCArgs, scinvokeSCArgs } from "../src/types/request";
 import { TextEncoder, TextDecoder } from "util";
@@ -16,7 +16,7 @@ const skip = (a: any, b: any) => {};
 const appName = "test";
 
 const appInfo: AppInfo = {
-  id: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  id: generateAppId(appName + new Date().toString()), //"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
   name: appName,
   description: "A brief testing application",
   url: "http://localhost",
@@ -36,7 +36,7 @@ let address2 = "";
 
 let xswd = new Api(appInfo, {
   address: "localhost",
-  port: 40000,
+  port: 40000, // 44326
   debug: DEBUG,
 });
 let scid: Hash;
@@ -64,7 +64,11 @@ async function createCaptainName() {
     throw error?.message;
   }
 
-  await xswd.waitFor("new_entry", (v) => v.txid == result?.txid);
+  await xswd.waitFor("new_entry", (v) => {
+    console.log("predicate", `${v.txid} == ${result?.txid}`);
+
+    return v.txid == result?.txid;
+  });
 }
 
 beforeAll(async () => {
@@ -84,6 +88,8 @@ beforeAll(async () => {
     await xswd.close();
     return addr.address;
   })();
+  console.log("got a second address");
+
   await xswd.initialize();
   console.log({ status: xswd.status });
 
@@ -91,153 +97,229 @@ beforeAll(async () => {
 
   const { txid } = await installTestSC();
   scid = txid;
+  console.log({ scid });
   const addressResponse = await xswd.wallet.GetAddress();
   address = "result" in addressResponse ? addressResponse.result.address : "";
+
+  console.log("Subscribing to events");
+
   await xswd.subscribe({ event: "new_entry" });
   await xswd.subscribe({ event: "new_topoheight" });
   await xswd.subscribe({ event: "new_balance" });
+
+  console.log("Create name");
+
   await createCaptainName();
+
+  console.log("beforeAll complete.");
 }, TIMEOUT * 2);
+
+afterAll(async () => {
+  console.log("closing.");
+  await xswd.close();
+});
 
 describe("commands", () => {
   describe("node", () => {
-    test("wrong format", async () => {
-      //@ts-ignore
-      const response = await xswd.node.Echo({});
-      expect("error" in response).toBe(true);
-    });
+    test(
+      "wrong format",
+      async () => {
+        //@ts-ignore
+        const response = await xswd.node.Echo({});
+        expect("error" in response).toBe(true);
+      },
+      TIMEOUT
+    );
 
-    test("DERO.Echo", async () => {
-      const echoStrings = ["hello", "world"];
-      const response = await xswd.node.Echo(echoStrings);
-      expect(response).toMatchObject({
-        result: `DERO ${echoStrings.join(" ")}`,
-      });
-    });
-
-    test("DERO.Ping", async () => {
-      const response = await xswd.node.Ping();
-      expect(response).toMatchObject({ result: "Pong " });
-    });
-
-    test("DERO.GetInfo", async () => {
-      const response = await xswd.node.GetInfo();
-
-      const [error, result] = to<"daemon", "DERO.GetInfo">(response);
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
-
-    test("DERO.GetBlock", async () => {
-      const response = await xswd.node.GetBlock({});
-      const [error, result] = to<"daemon", "DERO.GetBlock">(response);
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
-
-    test("DERO.GetBlockHeaderByTopoHeight", async () => {
-      const response = await xswd.node.GetBlockHeaderByTopoHeight({
-        topoheight: 0,
-      });
-      const [error, result] = to<"daemon", "DERO.GetBlockHeaderByTopoHeight">(
-        response
-      );
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
-
-    test("DERO.GetBlockHeaderByHash", async () => {
-      const hashResponse = await xswd.node.GetBlockHeaderByTopoHeight({
-        topoheight: 0,
-      });
-      if ("result" in hashResponse) {
-        const hash = hashResponse.result.block_header.hash;
-        const response = await xswd.node.GetBlockHeaderByHash({
-          hash,
+    test(
+      "DERO.Echo",
+      async () => {
+        const echoStrings = ["hello", "world"];
+        const response = await xswd.node.Echo(echoStrings);
+        expect(response).toMatchObject({
+          result: `DERO ${echoStrings.join(" ")}`,
         });
-        const [error, result] = to<"daemon", "DERO.GetBlockHeaderByHash">(
+      },
+      TIMEOUT
+    );
+
+    test(
+      "DERO.Ping",
+      async () => {
+        const response = await xswd.node.Ping();
+        expect(response).toMatchObject({ result: "Pong " });
+      },
+      TIMEOUT
+    );
+
+    test(
+      "DERO.GetInfo",
+      async () => {
+        const response = await xswd.node.GetInfo();
+
+        const [error, result] = to<"daemon", "DERO.GetInfo">(response);
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+      },
+      TIMEOUT
+    );
+
+    test(
+      "DERO.GetBlock",
+      async () => {
+        const response = await xswd.node.GetBlock({});
+        const [error, result] = to<"daemon", "DERO.GetBlock">(response);
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+      },
+      TIMEOUT
+    );
+
+    test(
+      "DERO.GetBlockHeaderByTopoHeight",
+      async () => {
+        const response = await xswd.node.GetBlockHeaderByTopoHeight({
+          topoheight: 0,
+        });
+        const [error, result] = to<"daemon", "DERO.GetBlockHeaderByTopoHeight">(
           response
         );
         expect(error).toBeUndefined();
         expect(result?.status).toBe("OK");
-      } else {
-        throw "GetBlockHeaderByTopoHeight failed for GetBlockHeaderByHash";
-      }
-    });
+      },
+      TIMEOUT
+    );
 
-    test("DERO.GetTxPool", async () => {
-      const response = await xswd.node.GetTxPool();
-      const [error, result] = to<"daemon", "DERO.GetTxPool">(response);
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
+    test(
+      "DERO.GetBlockHeaderByHash",
+      async () => {
+        const hashResponse = await xswd.node.GetBlockHeaderByTopoHeight({
+          topoheight: 0,
+        });
+        if ("result" in hashResponse) {
+          const hash = hashResponse.result.block_header.hash;
+          const response = await xswd.node.GetBlockHeaderByHash({
+            hash,
+          });
+          const [error, result] = to<"daemon", "DERO.GetBlockHeaderByHash">(
+            response
+          );
+          expect(error).toBeUndefined();
+          expect(result?.status).toBe("OK");
+        } else {
+          throw "GetBlockHeaderByTopoHeight failed for GetBlockHeaderByHash";
+        }
+      },
+      TIMEOUT
+    );
 
-    test("DERO.GetRandomAddress", async () => {
-      const response = await xswd.node.GetRandomAddress();
-      const [error, result] = to<"daemon", "DERO.GetRandomAddress">(response);
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
+    test(
+      "DERO.GetTxPool",
+      async () => {
+        const response = await xswd.node.GetTxPool();
+        const [error, result] = to<"daemon", "DERO.GetTxPool">(response);
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+      },
+      TIMEOUT
+    );
 
-    test("DERO.GetTransaction", async () => {
-      const response = await xswd.node.GetTransaction({
-        txs_hashes: [],
-      });
-      const [error, result] = to<"daemon", "DERO.GetTransaction">(response);
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-      expect(result?.txs).toBeDefined();
-    });
+    test(
+      "DERO.GetRandomAddress",
+      async () => {
+        const response = await xswd.node.GetRandomAddress();
+        const [error, result] = to<"daemon", "DERO.GetRandomAddress">(response);
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+      },
+      TIMEOUT
+    );
+
+    test(
+      "DERO.GetTransaction",
+      async () => {
+        const response = await xswd.node.GetTransaction({
+          txs_hashes: [],
+        });
+        const [error, result] = to<"daemon", "DERO.GetTransaction">(response);
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+        expect(result?.txs).toBeDefined();
+      },
+      TIMEOUT
+    );
 
     test("DERO.SendRawTransaction", async () => {
       // TODO untested
     });
 
-    test("DERO.GetHeight", async () => {
-      const response = await xswd.node.GetHeight();
-      const [error, result] = to<"daemon", "DERO.GetHeight">(response);
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
+    test(
+      "DERO.GetHeight",
+      async () => {
+        const response = await xswd.node.GetHeight();
+        const [error, result] = to<"daemon", "DERO.GetHeight">(response);
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+      },
+      TIMEOUT
+    );
 
-    test("DERO.GetBlockCount", async () => {
-      const response = await xswd.node.GetBlockCount();
-      const [error, result] = to<"daemon", "DERO.GetBlockCount">(response);
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
+    test(
+      "DERO.GetBlockCount",
+      async () => {
+        const response = await xswd.node.GetBlockCount();
+        const [error, result] = to<"daemon", "DERO.GetBlockCount">(response);
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+      },
+      TIMEOUT
+    );
 
-    test("DERO.GetLastBlockHeader", async () => {
-      const response = await xswd.node.GetLastBlockHeader();
-      const [error, result] = to<"daemon", "DERO.GetLastBlockHeader">(response);
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
+    test(
+      "DERO.GetLastBlockHeader",
+      async () => {
+        const response = await xswd.node.GetLastBlockHeader();
+        const [error, result] = to<"daemon", "DERO.GetLastBlockHeader">(
+          response
+        );
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+      },
+      TIMEOUT
+    );
 
-    test("DERO.GetBlockTemplate", async () => {
-      const response = await xswd.node.GetBlockTemplate({
-        wallet_address: address,
-        block: true,
-        miner: address,
-      });
+    test(
+      "DERO.GetBlockTemplate",
+      async () => {
+        const response = await xswd.node.GetBlockTemplate({
+          wallet_address: address,
+          block: true,
+          miner: address,
+        });
 
-      const [error, result] = to<"daemon", "DERO.GetBlockTemplate">(response);
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
+        const [error, result] = to<"daemon", "DERO.GetBlockTemplate">(response);
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+      },
+      TIMEOUT
+    );
 
-    test("DERO.GetEncryptedBalance", async () => {
-      const response = await xswd.node.GetEncryptedBalance({
-        address,
-        topoheight: -1,
-      });
+    test(
+      "DERO.GetEncryptedBalance",
+      async () => {
+        const response = await xswd.node.GetEncryptedBalance({
+          address,
+          topoheight: -1,
+        });
 
-      const [error, result] = to<"daemon", "DERO.GetEncryptedBalance">(
-        response
-      );
-      expect(error).toBeUndefined();
-      expect(result?.status).toBe("OK");
-    });
+        const [error, result] = to<"daemon", "DERO.GetEncryptedBalance">(
+          response
+        );
+        expect(error).toBeUndefined();
+        expect(result?.status).toBe("OK");
+      },
+      TIMEOUT
+    );
 
     test(
       "DERO.GetSC",
@@ -259,57 +341,81 @@ describe("commands", () => {
       TIMEOUT * 3
     );
 
-    test("DERO.GetGasEstimate", async () => {
-      const response = await xswd.node.GetGasEstimate({
-        sc_rpc: gasEstimateSCArgs(scid, "Initialize", []),
-        signer: address,
-      });
+    test(
+      "DERO.GetGasEstimate",
+      async () => {
+        const response = await xswd.node.GetGasEstimate({
+          sc_rpc: gasEstimateSCArgs(scid, "Initialize", []),
+          signer: address,
+        });
 
-      const [error, result] = to<"daemon", "DERO.GetGasEstimate">(response);
+        const [error, result] = to<"daemon", "DERO.GetGasEstimate">(response);
 
-      expect(error).toBeUndefined();
-      expect(result?.gasstorage).toBeGreaterThan(0);
-    });
+        expect(error).toBeUndefined();
+        expect(result?.gasstorage).toBeGreaterThan(0);
+      },
+      TIMEOUT
+    );
 
-    test("DERO.NameToAddress", async () => {
-      const response = await xswd.node.NameToAddress({
-        name: "captain",
-        topoheight: -1,
-      });
-      const [error, result] = to<"daemon", "DERO.NameToAddress">(response);
-      expect(error).toBeUndefined();
-      expect(result?.address).toBe(address);
-    });
+    test(
+      "DERO.NameToAddress",
+      async () => {
+        const response = await xswd.node.NameToAddress({
+          name: "captain",
+          topoheight: -1,
+        });
+        const [error, result] = to<"daemon", "DERO.NameToAddress">(response);
+        expect(error).toBeUndefined();
+        expect(result?.address).toBe(address);
+      },
+      TIMEOUT
+    );
   });
 
   describe("wallet", () => {
-    test("Echo", async () => {
-      const echoStrings = ["hello", "world"];
-      const response = await xswd.wallet.Echo(echoStrings);
-      expect(response).toMatchObject({
-        result: `WALLET ${echoStrings.join(" ")}`,
-      });
-    });
-    test("GetAddress", async () => {
-      const response = await xswd.wallet.GetAddress();
+    test(
+      "Echo",
+      async () => {
+        const echoStrings = ["hello", "world"];
+        const response = await xswd.wallet.Echo(echoStrings);
+        expect(response).toMatchObject({
+          result: `WALLET ${echoStrings.join(" ")}`,
+        });
+      },
+      TIMEOUT
+    );
+    test(
+      "GetAddress",
+      async () => {
+        const response = await xswd.wallet.GetAddress();
 
-      const [error, result] = to<"wallet", "GetAddress">(response);
-      expect(error).toBeUndefined();
-      expect(result?.address.length).toBe(ADDRESS_LENGTH);
-    });
-    test("GetBalance", async () => {
-      const response = await xswd.wallet.GetBalance();
+        const [error, result] = to<"wallet", "GetAddress">(response);
+        expect(error).toBeUndefined();
+        expect(result?.address.length).toBe(ADDRESS_LENGTH);
+      },
+      TIMEOUT
+    );
+    test(
+      "GetBalance",
+      async () => {
+        const response = await xswd.wallet.GetBalance();
 
-      const [error, result] = to<"wallet", "GetBalance">(response);
-      expect(error).toBeUndefined();
-      expect(result?.balance).toBeGreaterThan(0);
-    });
-    test("GetHeight", async () => {
-      const response = await xswd.wallet.GetHeight();
-      const [error, result] = to<"wallet", "GetHeight">(response);
-      expect(error).toBeUndefined();
-      expect(result?.height).toBeGreaterThanOrEqual(0);
-    });
+        const [error, result] = to<"wallet", "GetBalance">(response);
+        expect(error).toBeUndefined();
+        expect(result?.balance).toBeGreaterThan(0);
+      },
+      TIMEOUT
+    );
+    test(
+      "GetHeight",
+      async () => {
+        const response = await xswd.wallet.GetHeight();
+        const [error, result] = to<"wallet", "GetHeight">(response);
+        expect(error).toBeUndefined();
+        expect(result?.height).toBeGreaterThanOrEqual(0);
+      },
+      TIMEOUT
+    );
     test(
       "GetTransferbyTXID",
       async () => {
@@ -343,16 +449,20 @@ describe("commands", () => {
       },
       TIMEOUT
     );
-    test("GetTransfers", async () => {
-      const response = await xswd.wallet.GetTransfers({
-        out: true,
-        in: true,
-      });
+    test(
+      "GetTransfers",
+      async () => {
+        const response = await xswd.wallet.GetTransfers({
+          out: true,
+          in: true,
+        });
 
-      const [error, result] = to<"wallet", "GetTransfers">(response);
-      expect(error).toBeUndefined();
-      expect(result?.entries).not.toBeUndefined();
-    });
+        const [error, result] = to<"wallet", "GetTransfers">(response);
+        expect(error).toBeUndefined();
+        expect(result?.entries).not.toBeUndefined();
+      },
+      TIMEOUT
+    );
 
     skip("MakeIntegratedAddress", async () => {
       const response = await xswd.wallet.MakeIntegratedAddress({
@@ -443,10 +553,10 @@ describe("commands", () => {
           skip_balance_check: false,
           only_positive_balances: false,
         });
-        const [error, resultResponse] = to<"wallet", "GetTrackedAssets">(
+        const [error /*resultResponse*/] = to<"wallet", "GetTrackedAssets">(
           response
         );
-        console.warn("GetTrackedAssets", { resultResponse });
+        //console.warn("GetTrackedAssets", { resultResponse });
 
         expect(error).toBeUndefined();
       },

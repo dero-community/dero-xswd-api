@@ -5,7 +5,7 @@ const appName = "test";
 
 describe("utils", () => {
   test("generates app id", async () => {
-    const id = await generateAppId(appName);
+    const id = generateAppId(appName);
     console.log({ id });
 
     expect(id.length).toBe(64);
