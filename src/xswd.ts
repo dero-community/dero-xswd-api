@@ -88,26 +88,30 @@ export class Api {
 
   response: Chan<Response<Entity, Method<Entity>, Result>> = new Chan(0);
   subscriptions: {
-    [et in EventType]: {
-      enabled: boolean;
-      event: Chan<EventResponse>;
-      callback?: (eventValue?: any) => void;
+    events: {
+      [et in EventType]: {
+        enabled: boolean;
+        waiting: Chan<any>[]; // when using waitfor a channel is added here
+        callback?: (eventValue?: any) => void; // callback defined on subscription
+      };
     };
   } = {
-    new_topoheight: {
-      enabled: false,
-      event: new Chan<EventResponse>(0),
-      callback: undefined,
-    },
-    new_entry: {
-      enabled: false,
-      event: new Chan<EventResponse>(0),
-      callback: undefined,
-    },
-    new_balance: {
-      enabled: false,
-      event: new Chan<EventResponse>(0),
-      callback: undefined,
+    events: {
+      new_topoheight: {
+        enabled: false,
+        waiting: [],
+        callback: undefined,
+      },
+      new_entry: {
+        enabled: false,
+        waiting: [],
+        callback: undefined,
+      },
+      new_balance: {
+        enabled: false,
+        waiting: [],
+        callback: undefined,
+      },
     },
   };
 
@@ -247,7 +251,7 @@ export class Api {
   ) {
     const websocket = this.connection[connectionType];
     if (websocket) {
-      websocket.onmessage = (message) => {
+      websocket.onmessage = async (message) => {
         let data:
           | AuthResponse
           | EventResponse
@@ -274,8 +278,9 @@ export class Api {
 
         if ("error" in data) {
           const errorData: Response<Entity, Method<Entity>, "error"> = data;
+
+          await this.response.send(errorData);
           reject(errorData.error.message);
-          this.response.send(errorData);
         } else if ("result" in data) {
           // event
           if (
@@ -288,15 +293,20 @@ export class Api {
             const eventType = eventData.result.event;
             const eventValue = eventData.result.value;
 
-            if (this.subscriptions[eventType].enabled) {
-              const callback = this.subscriptions[eventType].callback;
+            if (this.subscriptions.events[eventType].enabled) {
+              const callback = this.subscriptions.events[eventType].callback;
               if (callback !== undefined) callback(eventValue);
-              this.subscriptions[eventType].event.send(eventData); // TODO REFACTOR WITH A SINGLE EVENT LOOP
+
+              this.subscriptions.events[eventType].waiting.forEach(
+                (waitingChannel) => {
+                  waitingChannel.send(eventValue);
+                }
+              );
               return;
             }
           }
           // normal response
-          this.response.send(data);
+          await this.response.send(data);
         }
       };
 
@@ -370,28 +380,35 @@ export class Api {
             id,
           };
 
+          this.config[this.mode]?.debug &&
+            console.dir({ bodyWithId }, { depth: null });
+
           // send data
           websocket.send(JSON.stringify(bodyWithId));
 
           // listen for the response
-
           for (;;) {
             const response = await this.response.recv();
             // if ids mismatch
             if (response.id != String(id)) {
               // send it back to the channel
               debug("id mismatch: ", response.id, String(id), ", resetting");
-              this.response.send(response);
+              await this.response.send(response);
               await sleep(CHECK_INTERVAL);
             } else {
               debug("id match");
+
+              this.config[this.mode]?.debug &&
+                console.dir({ response }, { depth: null });
               resolve(
                 response as Response<E, M, "error"> | Response<E, M, "result">
               );
+              return;
             }
           }
         } else {
           reject("sending without being connected");
+          return;
         }
       }
     );
@@ -416,8 +433,8 @@ export class Api {
       });
       if ("result" in subscription) {
         if (subscription.result) {
-          this.subscriptions[event].enabled = true;
-          this.subscriptions[event].callback = callback;
+          this.subscriptions.events[event].enabled = true;
+          this.subscriptions.events[event].callback = callback;
         }
         return subscription.result;
       }
@@ -441,14 +458,26 @@ export class Api {
       throw "cannot wait for event in fallback mode";
     }
 
-    if (!this.subscriptions[event].enabled) {
+    if (!this.subscriptions.events[event].enabled) {
       throw `event ${event} has not been subscribed to`;
     }
 
     if (this.connection.xswd && this.status.initialized) {
-      const eventChannel = this.subscriptions[event].event;
+      const c = new Chan<any>();
+      this.subscriptions.events[event].waiting.push(c);
       for (;;) {
-        // TODO REFACTOR MOVE THIS EVENT LOOP SOMEWHERE ELSE, Instead simply register for the event, and when an event arrives check for subscribers = callback | waitfor (& predicate)
+        const value = await c.recv();
+        if (predicate === undefined) {
+          return value;
+        } else if (predicate && predicate(value)) {
+          return value;
+        }
+      }
+
+      /*// TODO REFACTOR MOVE THIS EVENT LOOP SOMEWHERE ELSE, Instead simply register for the event, and when an event arrives check for subscribers = callback | waitfor (& predicate)
+      const eventChannel = this.subscriptions.events[event].event;
+      for (;;) {
+        
         debug("waiting for event", event, ", predicate?", predicate);
 
         const eventResponse = await eventChannel.recv();
@@ -464,7 +493,7 @@ export class Api {
             return eventResponse.result.value;
           }
         }
-      }
+      }*/
     } else {
       throw "cannot wait for event if connection is not initialized";
     }

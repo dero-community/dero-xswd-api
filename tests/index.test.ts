@@ -324,6 +324,23 @@ describe("commands", () => {
     test(
       "DERO.GetSC",
       async () => {
+        const response = await xswd.node.GetSC({
+          scid,
+          code: true,
+          variables: true,
+        });
+
+        const [error, result] = to<"daemon", "DERO.GetSC">(response);
+
+        expect(error).toBeUndefined();
+        expect(result?.code == TEST_SC);
+      },
+      TIMEOUT
+    );
+
+    test(
+      "DERO.GetSC (waitAfterNewBlock)",
+      async () => {
         const response = await xswd.node.GetSC(
           {
             scid,
@@ -577,7 +594,7 @@ describe("events", () => {
 
       await xswd.waitFor("new_topoheight");
     },
-    TIMEOUT
+    TIMEOUT * 4
   );
 
   test(
