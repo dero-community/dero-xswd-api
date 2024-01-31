@@ -23,7 +23,7 @@ let xswd = new Api(
 );
 
 beforeAll(async () => {
-  await xswd.initialize();
+  await xswd.initialize(); // TODO use xswd.initializeFallback()
 }, TIMEOUT);
 
 afterAll(async () => {

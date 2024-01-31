@@ -78,7 +78,7 @@ beforeAll(async () => {
       port: 40001,
       debug: DEBUG,
     });
-    await xswd.initialize();
+    await xswd.initialize(); // TODO use xswd.initializeXSWD()
     const [err, addr] = to<"wallet", "GetAddress">(
       await xswd.wallet.GetAddress()
     );
@@ -91,7 +91,7 @@ beforeAll(async () => {
   console.log("got a second address");
 
   await xswd.initialize();
-  console.log({ status: xswd.status });
+  console.log({ status: xswd.state });
 
   console.log("Installing SC");
 

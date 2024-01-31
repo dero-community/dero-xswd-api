@@ -75,8 +75,6 @@ export class Api {
     fallback: ConnectionState.Closed,
   };
 
-  mode: ConnectionType = ConnectionType.XSWD;
-
   buffer: string = "";
 
   appInfo: AppInfo;
@@ -117,15 +115,12 @@ export class Api {
 
   private nextId: number = 1;
 
-  get status():
-    | { initialized: false }
-    | { initialized: true; fallback: boolean } {
-    return {
-      initialized:
-        this.state.xswd == ConnectionState.Accepted ||
-        this.state.fallback == ConnectionState.Accepted,
-      fallback: this.mode == ConnectionType.Fallback,
-    };
+  public get mode(): ConnectionType {
+    return this.state.xswd == ConnectionState.Accepted
+      ? ConnectionType.XSWD
+      : this.state.fallback != ConnectionState.Accepted
+      ? ConnectionType.XSWD
+      : ConnectionType.Fallback;
   }
 
   constructor(
@@ -154,31 +149,47 @@ export class Api {
     };
   }
 
+  // deprecated
   async initialize() {
     return new Promise<void>(async (resolve, reject) => {
       debug("initializing api");
+      return Promise.all([this.initializeFallback, this.initializeXSWD]);
+    });
+  }
+
+  async initializeFallback() {
+    return new Promise<void>(async (resolve, reject) => {
+      debug("initializing fallback");
 
       if (this.config.fallback) {
-        await this._initializeWebsocket(ConnectionType.Fallback)
+        this._initializeWebsocket(ConnectionType.Fallback)
           .then(() => {
             debug("fallback intitialized");
+            resolve();
           })
           .catch((error) => {
             console.warn("failed to initialize fallback:", error);
+            reject(error);
           });
+      } else {
+        reject("fallback has no config");
       }
+    });
+  }
 
+  async initializeXSWD() {
+    return new Promise<void>(async (resolve, reject) => {
       debug("initializing xswd");
 
-      await this._initializeWebsocket(ConnectionType.XSWD)
+      this._initializeWebsocket(ConnectionType.XSWD)
         .then(() => {
           debug("xswd initialized");
-          this.connection.fallback?.close();
-          this.mode = ConnectionType.XSWD;
+          this.closeFallback();
+
           resolve();
         })
         .catch((error) => {
-          if (this.status.initialized == true && this.status.fallback) {
+          if (this.state.fallback == ConnectionState.Accepted) {
             console.warn("failed to initialize xswd. staying in fallback mode");
             debug("" + error);
             resolve();
@@ -223,7 +234,7 @@ export class Api {
     | Response<Entity, Method<Entity>, "error">
     | Response<Entity, Method<Entity>, "result">
     | null {
-    debug("WebSocket:onmessage", { message });
+    //debug("WebSocket:onmessage", { message });
     // fragmented messages handling
     try {
       // default parsing a single message
@@ -345,15 +356,28 @@ export class Api {
     }
   }
 
-  async close() {
-    if (this.status.initialized) {
+  async closeXSWD() {
+    if (
+      this.state.xswd == ConnectionState.Accepted ||
+      this.state.xswd == ConnectionState.WaitingAuth
+    ) {
+      debug("closing xswd");
       this.connection.xswd?.close();
-      this.connection.fallback?.close();
-      this.state = {
-        xswd: ConnectionState.Closed,
-        fallback: ConnectionState.Closed,
-      };
+      this.state.xswd = ConnectionState.Closed;
     }
+  }
+  async closeFallback() {
+    if (this.state.fallback == ConnectionState.Accepted) {
+      debug("closing fallback");
+      this.connection.fallback?.close();
+
+      this.state.fallback = ConnectionState.Closed;
+    }
+  }
+
+  async close() {
+    this.closeFallback();
+    this.closeXSWD();
   }
 
   async Send<E extends Entity, M extends Method<E>>( //! previously sendSync
@@ -380,8 +404,9 @@ export class Api {
             id,
           };
 
-          this.config[this.mode]?.debug &&
-            console.dir({ bodyWithId }, { depth: null });
+          /*this.config[this.mode]?.debug &&
+            console.dir({ bodyWithId }, { depth: null });*/
+          debug("sending", bodyWithId);
 
           // send data
           websocket.send(JSON.stringify(bodyWithId));
@@ -422,8 +447,7 @@ export class Api {
     callback?: (value: any) => void;
   }) {
     if (
-      this.connection.xswd &&
-      this.status.initialized &&
+      this.state.xswd == ConnectionState.Accepted &&
       this.mode === ConnectionType.XSWD
     ) {
       const subscription = await this.Send("wallet", "Subscribe", {
@@ -462,7 +486,7 @@ export class Api {
       throw `event ${event} has not been subscribed to`;
     }
 
-    if (this.connection.xswd && this.status.initialized) {
+    if (this.state.xswd == ConnectionState.Accepted) {
       const c = new Chan<any>();
       this.subscriptions.events[event].waiting.push(c);
       for (;;) {
@@ -473,27 +497,6 @@ export class Api {
           return value;
         }
       }
-
-      /*// TODO REFACTOR MOVE THIS EVENT LOOP SOMEWHERE ELSE, Instead simply register for the event, and when an event arrives check for subscribers = callback | waitfor (& predicate)
-      const eventChannel = this.subscriptions.events[event].event;
-      for (;;) {
-        
-        debug("waiting for event", event, ", predicate?", predicate);
-
-        const eventResponse = await eventChannel.recv();
-
-        if (eventResponse.result.event != event) {
-          eventChannel.send(eventResponse);
-          await sleep(CHECK_INTERVAL);
-        } else {
-          if (predicate && !predicate(eventResponse.result.value)) {
-            eventChannel.send(eventResponse);
-            await sleep(CHECK_INTERVAL);
-          } else {
-            return eventResponse.result.value;
-          }
-        }
-      }*/
     } else {
       throw "cannot wait for event if connection is not initialized";
     }
