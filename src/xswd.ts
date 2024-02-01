@@ -289,7 +289,6 @@ export class Api {
 
         if ("error" in data) {
           const errorData: Response<Entity, Method<Entity>, "error"> = data;
-
           await this.response.send(errorData);
           reject(errorData.error.message);
         } else if ("result" in data) {
@@ -345,7 +344,7 @@ export class Api {
       };
 
       websocket.onclose = () => {
-        this.state[connectionType] = ConnectionState.Initializing;
+        this.state[connectionType] = ConnectionState.Closed;
         this.connection[connectionType] = null;
 
         debug(connectionType + " connection closed");
