@@ -151,10 +151,14 @@ export class Api {
 
   // deprecated
   async initialize() {
-    return new Promise<void>(async (resolve, reject) => {
-      debug("initializing api");
-      return Promise.all([this.initializeFallback, this.initializeXSWD]);
-    });
+    debug("initializing api");
+    if (this.config.fallback) {
+      await this.initializeFallback().finally(async () => {
+        await this.initializeXSWD();
+      });
+    } else {
+      await this.initializeXSWD();
+    }
   }
 
   async initializeFallback() {
