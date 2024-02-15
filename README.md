@@ -24,7 +24,7 @@ const name = "My application";
 
 // Fill up some info, these fields must be non-empty
 const appInfo: AppInfo = {
-  id: await generateAppId(name), // generates a hash automatically
+  id: generateAppId(name), // generates a hash automatically
   name,
   description: "My app's description",
   url: "https://myapp.com" // Optional
@@ -34,24 +34,63 @@ const appInfo: AppInfo = {
 const xswd = new Api(appInfo);
 
 // Initialize the connection => Will require to confirm in your wallet
-await xswd.initialize();
+await xswd.initializeXSWD();
 ```
 ##### Javascript
 ```js
-/* Javascript */
 import { Api, generateAppId } from "dero-xswd-api";
 
 const name = "My application";
 
 const appInfo = {
-  id: await generateAppId(name),
+  id: generateAppId(name),
   name,
   description: "My app's description",
+  url: "https://myapp.com" // Optional
 };
 
 const xswd = new Api(appInfo);
 
-await xswd.initialize();
+await xswd.initializeXSWD();
+```
+
+#### Using custom configuration and fallback node connection
+
+```ts
+// Refer to Config type in "src/types/types.ts"
+const config /*: Config */= {
+  address: "127.0.0.1",
+  port: 40000, // example for simulator wallet using xswd
+  secure: false, // uses "wss://" prefix (secure websocket) when true. Useful to connect to a remote node under an "https://" scheme.
+  debug: true, // debug mode enabled. will print a lot of messages to console.
+};
+
+// fallback should point to a node so that blockchain data or SC data can be pulled even if the wallet is not connected
+const fallback_config /*: Config */ = { 
+  address: "127.0.0.1",
+  port: 20000, // example for simulator node
+  secure: false, 
+  // debug attribute here will be ignored
+}
+      
+const xswd = new Api(appInfo, config, fallback_config);
+
+await xswd.initializeFallback();
+await xswd.initializeXSWD(); // if this one succeeds, the fallback connection will be closed.
+
+```
+
+#### Handle closing websocket
+
+If the websocket connection is closed, the `onclose` callback will be called.
+
+```js
+// set a handler for the websocket closing
+xswd.onclose = function(connectionType/* : ConnectionType */, closeEvent /* : CloseEvent */) {
+  if (connectionType == "xswd" /* connectionType == ConnectionType.XSWD */) {
+    console.error("Connection was closed!", closeEvent)
+  }
+}
 ```
 
 #### Calls

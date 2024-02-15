@@ -45,7 +45,12 @@ import { sleep } from "./utils";
 
 let debug = makeDebug(false)("xswd");
 
-const DEFAULT_CONFIG = { ip: "localhost", port: 44326 };
+const DEFAULT_CONFIG: Config = {
+  address: "127.0.0.1",
+  port: 44326,
+  secure: false,
+  debug: false,
+};
 const DEFAULT_TIMEOUT = {
   AUTH_TIMEOUT: undefined,
   METHOD_TIMEOUT: undefined,
@@ -347,10 +352,10 @@ export class Api {
         }
       };
 
-      websocket.onclose = () => {
+      websocket.onclose = (ev) => {
         this.state[connectionType] = ConnectionState.Closed;
         this.connection[connectionType] = null;
-
+        this.onclose(connectionType, ev);
         debug(connectionType + " connection closed");
         reject(connectionType + " connection closed");
       };
@@ -358,6 +363,9 @@ export class Api {
       debug(connectionType + " websocket handlers are set");
     }
   }
+
+  // callback meant to be set by user
+  onclose(connectionType: ConnectionType, ev: CloseEvent) {}
 
   async closeXSWD() {
     if (
