@@ -200,8 +200,8 @@ export class Api {
         .catch((error) => {
           if (this.state.fallback == ConnectionState.Accepted) {
             console.warn("failed to initialize xswd. staying in fallback mode");
-            debug("" + error);
-            resolve();
+            console.error(error);
+            reject(error);
           } else {
             console.error("failed to initialize xswd or fallback:", error);
             reject(error);
@@ -434,8 +434,6 @@ export class Api {
             } else {
               debug("id match");
 
-              this.config[this.mode]?.debug &&
-                console.dir({ response }, { depth: null });
               resolve(
                 response as Response<E, M, "error"> | Response<E, M, "result">
               );
