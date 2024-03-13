@@ -1,6 +1,6 @@
 {
   "name": "dero-xswd-api",
-  "version": "0.8.3-c",
+  "version": "0.8.3-d",
   "description": "JS/TS api for the XSWD protocol on the DERO wallet",
   "main": "dist/index.mjs",
   "types": "dist/index.d.ts",
