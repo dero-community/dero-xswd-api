@@ -432,7 +432,7 @@ export class Api {
               await this.response.send(response);
               await sleep(CHECK_INTERVAL);
             } else {
-              debug("id match");
+              debug("id match", { response });
 
               resolve(
                 response as Response<E, M, "error"> | Response<E, M, "result">
